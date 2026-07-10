@@ -293,5 +293,55 @@ def map_cmd(
             )
 
 
+@app.command()
+def eval(
+    gold_path: Annotated[Path | None, typer.Option(help="Gold set CSV (défaut: config).")] = None,
+    bronze_dir: Annotated[
+        Path | None, typer.Option(help="Répertoire OHDSI (défaut: config).")
+    ] = None,
+    embedding_backend: Annotated[
+        str | None, typer.Option(help="hashing (offline) ou sentence_transformers.")
+    ] = None,
+    vector_backend: Annotated[str | None, typer.Option(help="memory (offline) ou qdrant.")] = None,
+) -> None:
+    """Évalue le retrieval sur le gold set (Top-1, recall@k, MRR)."""
+    from governed_omop_rag.eval.gold_set import load_gold_set
+    from governed_omop_rag.eval.runner import evaluate
+    from governed_omop_rag.medallion.db import connect
+    from governed_omop_rag.medallion.gold import fetch_gold
+    from governed_omop_rag.medallion.pipeline import build_corpus
+    from governed_omop_rag.retrieval.embeddings import (
+        HashingEmbedder,
+        SentenceTransformerEmbedder,
+    )
+    from governed_omop_rag.retrieval.factory import get_vectorstore
+    from governed_omop_rag.retrieval.index import index_gold
+    from governed_omop_rag.retrieval.retriever import DenseRetriever
+    from governed_omop_rag.retrieval.vectorstore import MemoryVectorStore
+
+    settings = get_settings()
+    emb = embedding_backend or settings.embedding_backend.value
+    vec = vector_backend or settings.vector_backend.value
+    embedder = (
+        HashingEmbedder(settings.embedding_dim)
+        if emb == "hashing"
+        else SentenceTransformerEmbedder(settings.embedding_model, settings.embedding_device)
+    )
+    store = MemoryVectorStore() if vec == "memory" else get_vectorstore(settings)
+
+    con = connect(":memory:")
+    try:
+        build_corpus(con, bronze_dir or settings.bronze_dir)
+        gold_concepts = fetch_gold(con)
+    finally:
+        con.close()
+    index_gold(gold_concepts, embedder, store)
+
+    gold = load_gold_set(gold_path or settings.gold_set_path)
+    report = evaluate(gold, DenseRetriever(embedder, store))
+    typer.echo(f"Backend : {emb}/{vec}")
+    typer.echo(report.as_table())
+
+
 if __name__ == "__main__":
     app()

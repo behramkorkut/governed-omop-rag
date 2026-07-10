@@ -157,3 +157,30 @@ def test_map_command_requires_input(tmp_path: Path) -> None:
     csv = _write_map(tmp_path)
     result = runner.invoke(app, ["map", "--map-path", str(csv)])
     assert result.exit_code == 2
+
+
+def test_eval_command(tmp_path: Path) -> None:
+    gold = tmp_path / "gold.csv"
+    gold.write_text(
+        "source_code,source_label,expected_concept_id\n"
+        ",diabète de type 2,201826\n"
+        ",asthme,4048098\n",
+        encoding="utf-8",
+    )
+    result = runner.invoke(
+        app,
+        [
+            "eval",
+            "--gold-path",
+            str(gold),
+            "--bronze-dir",
+            str(FIXTURES),
+            "--embedding-backend",
+            "hashing",
+            "--vector-backend",
+            "memory",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Top-1" in result.stdout
+    assert "recall@" in result.stdout

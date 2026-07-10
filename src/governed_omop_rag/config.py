@@ -85,6 +85,9 @@ class Settings(BaseSettings):
     # --- Router déterministe : alignement officiel CIM-10 <-> SNOMED-CT (ATIH) ---
     router_map_path: Path = Path("data/router/cim10_snomed_official.csv")
 
+    # --- Évaluation : gold set (vérité terrain reproductible) ---
+    gold_set_path: Path = Path("data/eval/gold_set.csv")
+
     # --- Garde-fous / gouvernance ---
     confidence_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
     top_k: int = Field(default=10, ge=1, le=100)

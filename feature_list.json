@@ -196,7 +196,7 @@
       "id": "P2-1",
       "phase": 2,
       "title": "Router complet (déterministe -> RAG sur résidu)",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "route les cas couverts en déterministe",
         "n'envoie au RAG que le résidu",

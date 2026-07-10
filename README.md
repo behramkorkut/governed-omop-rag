@@ -71,6 +71,20 @@ URL Qdrant, modèle d'embeddings…). Toutes les variables sont préfixées `GOR
 docker compose up -d qdrant   # base vectorielle sur http://localhost:6333
 ```
 
+### Démo vs production
+
+Les commandes `gor search` / `gor map` / `gor eval` **reconstruisent le corpus en
+mémoire à chaque appel** — pratique pour la démo « essayez en 2 minutes », mais
+non-optimal. Le workflow **production** visé (couches à venir) est :
+
+1. `gor build-corpus` une fois → persiste le Gold en DuckDB ;
+2. indexation une fois → upsert des vecteurs dans Qdrant (persistant) ;
+3. `gor map` lit l'index Qdrant existant, sans rien reconstruire.
+
+Backends **hors-ligne** (`--embedding-backend hashing --vector-backend memory`)
+pour tester sans Docker ni téléchargement ; backends **réels** (BioLORD + Qdrant)
+en production.
+
 ## Structure
 
 ```
