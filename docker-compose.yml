@@ -1,0 +1,27 @@
+# ---------------------------------------------------------------------------
+# Environnement de dev. Phase 0 : uniquement Qdrant (base vectorielle souveraine).
+# Les services api / ui seront ajoutés en Phase 4 (cf. feature_list.json P6-3).
+# ---------------------------------------------------------------------------
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: gor-qdrant
+    ports:
+      - "6333:6333" # REST
+      - "6334:6334" # gRPC
+    volumes:
+      - ./qdrant_storage:/qdrant/storage
+    restart: unless-stopped
+
+  # Service applicatif (optionnel en Phase 0 ; utile pour `gor info` en conteneur).
+  app:
+    build: .
+    container_name: gor-app
+    depends_on:
+      - qdrant
+    environment:
+      - GOR_QDRANT_URL=http://qdrant:6333
+    env_file:
+      - .env
+    profiles: ["app"] # ne démarre pas par défaut : `docker compose --profile app up`
+    command: ["gor", "info"]

@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# uv / venv
+.venv/
+uv.lock.bak
+
+# Environnement
+.env
+.env.local
+
+# Tests / couverture / cache outils
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Données (vocabulaires OHDSI / CIM-10 FR volumineux) — voir data/*/.gitignore
+# On versionne uniquement la structure (.gitkeep), pas les fichiers de données.
+
+# Qdrant local (docker volume monté)
+qdrant_storage/
+
+# Divers OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+#journal de bord 
+progress.txt
+CONTEXT.md
