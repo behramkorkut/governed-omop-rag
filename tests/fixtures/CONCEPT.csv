@@ -1,0 +1,7 @@
+concept_id	concept_name	domain_id	vocabulary_id	concept_class_id	standard_concept	concept_code	valid_start_date	valid_end_date	invalid_reason
+201826	Type 2 diabetes mellitus	Condition	SNOMED	Clinical Finding	S	44054006	1970-01-01	2099-12-31	
+4048098	Asthma	Condition	SNOMED	Clinical Finding	S	195967001	1970-01-01	2099-12-31	
+320128	Essential hypertension	Condition	SNOMED	Clinical Finding	S	59621000	1970-01-01	2099-12-31	
+1503297	metformin	Drug	RxNorm	Ingredient	S	6809	1970-01-01	2099-12-31	
+45542735	Type 2 diabetes mellitus without complications	Condition	ICD10CM	4-char billing code		E11.9	1970-01-01	2099-12-31	
+111111	Obsolete diabetes concept	Condition	SNOMED	Clinical Finding	S	00000001	1970-01-01	2010-12-31	D

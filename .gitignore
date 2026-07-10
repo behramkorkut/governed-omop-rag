@@ -37,3 +37,7 @@ qdrant_storage/
 #journal de bord 
 progress.txt
 CONTEXT.md
+
+# DuckDB générées
+*.duckdb
+*.duckdb.wal

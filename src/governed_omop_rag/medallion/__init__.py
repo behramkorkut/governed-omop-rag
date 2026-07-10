@@ -6,3 +6,15 @@ Gold   : documents « embedding-ready » (nom + synonymes + domaine + vocabulair
 
 Implémenté en transformations Python + DuckDB (pas de framework ETL orchestré).
 """
+
+from governed_omop_rag.medallion.gold import GoldConcept, build_gold, fetch_gold
+from governed_omop_rag.medallion.pipeline import CorpusStats, build_corpus, run_pipeline
+
+__all__ = [
+    "GoldConcept",
+    "CorpusStats",
+    "build_corpus",
+    "build_gold",
+    "fetch_gold",
+    "run_pipeline",
+]
