@@ -105,3 +105,55 @@ def test_search_command_offline() -> None:
     # 1re ligne = en-tête ; 2e ligne = meilleur candidat -> doit être 201826 + score.
     assert "201826" in lines[1]
     assert "0." in lines[1]
+
+
+def test_map_command_deterministic(tmp_path: Path) -> None:
+    csv = _write_map(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "map",
+            "--source-code",
+            "E11.9",
+            "--map-path",
+            str(csv),
+            "--bronze-dir",
+            str(FIXTURES),
+            "--embedding-backend",
+            "hashing",
+            "--vector-backend",
+            "memory",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "official_map" in result.stdout
+    assert "201826" in result.stdout
+
+
+def test_map_command_rag_on_label(tmp_path: Path) -> None:
+    csv = _write_map(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "map",
+            "--source-label",
+            "diabète de type 2",
+            "--map-path",
+            str(csv),
+            "--bronze-dir",
+            str(FIXTURES),
+            "--embedding-backend",
+            "hashing",
+            "--vector-backend",
+            "memory",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "rag" in result.stdout
+    assert "201826" in result.stdout
+
+
+def test_map_command_requires_input(tmp_path: Path) -> None:
+    csv = _write_map(tmp_path)
+    result = runner.invoke(app, ["map", "--map-path", str(csv)])
+    assert result.exit_code == 2

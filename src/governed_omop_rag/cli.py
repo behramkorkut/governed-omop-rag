@@ -200,5 +200,98 @@ def search(
         )
 
 
+@app.command("map")
+def map_cmd(
+    source_code: Annotated[
+        str | None, typer.Option(help="Code source, ex. E11.9 (CIM-10 FR).")
+    ] = None,
+    source_label: Annotated[
+        str | None, typer.Option(help="Libellé clinique, ex. 'diabète de type 2'.")
+    ] = None,
+    source_vocabulary: Annotated[
+        str | None, typer.Option(help="Vocabulaire source, ex. ICD10FR.")
+    ] = None,
+    bronze_dir: Annotated[
+        Path | None, typer.Option(help="Répertoire OHDSI (défaut: config).")
+    ] = None,
+    map_path: Annotated[
+        Path | None, typer.Option(help="Alignement officiel CSV (défaut: config).")
+    ] = None,
+    top_k: Annotated[int, typer.Option(help="Nombre de candidats RAG.")] = 5,
+    embedding_backend: Annotated[
+        str | None, typer.Option(help="hashing (offline) ou sentence_transformers.")
+    ] = None,
+    vector_backend: Annotated[str | None, typer.Option(help="memory (offline) ou qdrant.")] = None,
+) -> None:
+    """Mapping hybride : match officiel déterministe, sinon RAG (retrieval) sur le résidu.
+
+    Démo offline : --embedding-backend hashing --vector-backend memory.
+    """
+    from governed_omop_rag.core.models import MappingRequest
+    from governed_omop_rag.medallion.db import connect
+    from governed_omop_rag.medallion.gold import fetch_gold
+    from governed_omop_rag.medallion.pipeline import build_corpus
+    from governed_omop_rag.retrieval.embeddings import (
+        HashingEmbedder,
+        SentenceTransformerEmbedder,
+    )
+    from governed_omop_rag.retrieval.factory import get_vectorstore
+    from governed_omop_rag.retrieval.index import index_gold
+    from governed_omop_rag.retrieval.retriever import DenseRetriever
+    from governed_omop_rag.retrieval.vectorstore import MemoryVectorStore
+    from governed_omop_rag.router.deterministic import OfficialMap
+    from governed_omop_rag.router.hybrid import HybridRouter
+
+    if not (source_code or source_label):
+        typer.echo("Erreur : fournir --source-code et/ou --source-label.", err=True)
+        raise typer.Exit(code=2)
+
+    settings = get_settings()
+    emb = embedding_backend or settings.embedding_backend.value
+    vec = vector_backend or settings.vector_backend.value
+    embedder = (
+        HashingEmbedder(settings.embedding_dim)
+        if emb == "hashing"
+        else SentenceTransformerEmbedder(settings.embedding_model, settings.embedding_device)
+    )
+    store = MemoryVectorStore() if vec == "memory" else get_vectorstore(settings)
+
+    con = connect(":memory:")
+    try:
+        build_corpus(con, bronze_dir or settings.bronze_dir)
+        gold = fetch_gold(con)
+    finally:
+        con.close()
+    index_gold(gold, embedder, store)
+
+    official_map = OfficialMap.from_csv(map_path or settings.router_map_path)
+    router = HybridRouter(
+        official_map,
+        DenseRetriever(embedder, store),
+        confidence_threshold=settings.confidence_threshold,
+        top_k=top_k,
+    )
+    request = MappingRequest(
+        source_code=source_code,
+        source_label=source_label,
+        source_vocabulary=source_vocabulary,
+    )
+    suggestion = router.route(request)
+
+    typer.echo(f"source            : {suggestion.source.value}")
+    typer.echo(f"target_concept_id : {suggestion.target_concept_id}")
+    typer.echo(f"confidence        : {suggestion.confidence:.3f}")
+    if suggestion.no_map_reason is not None:
+        typer.echo(f"no_map_reason     : {suggestion.no_map_reason.value}")
+    typer.echo(f"justification     : {suggestion.justification}")
+    if suggestion.candidates:
+        typer.echo("candidats :")
+        for rank, c in enumerate(suggestion.candidates, start=1):
+            typer.echo(
+                f"  {rank}. [{c.score:.3f}] concept_id={c.concept_id} "
+                f"{c.concept_name} ({c.vocabulary_id}/{c.domain_id})"
+            )
+
+
 if __name__ == "__main__":
     app()

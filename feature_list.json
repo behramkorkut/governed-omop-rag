@@ -5,7 +5,7 @@
     "workflow": "Fable 5 génère le code + tests ; Kimi exécute, teste les edge cases, et flip 'passes' après validation ; l'auteur gère git.",
     "passes": "false = non fait ou non vérifié ; true = implémenté ET vérifié réellement."
   },
-  "current_phase": 1,
+  "current_phase": 2,
   "features": [
     {
       "id": "P0-1",
@@ -162,7 +162,7 @@
       "id": "P1-5",
       "phase": 1,
       "title": "Embeddings BioLORD locaux (batch)",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "embeddings calculés en local (aucun envoi tiers)",
         "batch reproductible",
@@ -173,7 +173,7 @@
       "id": "P1-6",
       "phase": 1,
       "title": "Interface VectorStore + implémentation Qdrant",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "interface VectorStore abstraite",
         "implémentation Qdrant (upsert + search)",

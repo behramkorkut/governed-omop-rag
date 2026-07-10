@@ -10,11 +10,13 @@ from governed_omop_rag.router.deterministic import (
     normalize_code,
     route_deterministic,
 )
+from governed_omop_rag.router.hybrid import HybridRouter
 
 __all__ = [
     "JUSTIFICATION_MATCH",
     "JUSTIFICATION_NO_MATCH",
     "DeterministicRouter",
+    "HybridRouter",
     "OfficialMap",
     "normalize_code",
     "route_deterministic",
