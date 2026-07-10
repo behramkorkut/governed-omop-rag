@@ -82,3 +82,26 @@ def test_route_command_requires_source_code(tmp_path: Path) -> None:
     csv = _write_map(tmp_path)
     result = runner.invoke(app, ["route", "--map-path", str(csv)])
     assert result.exit_code == 2  # --source-code requis
+
+
+def test_search_command_offline() -> None:
+    result = runner.invoke(
+        app,
+        [
+            "search",
+            "diabète de type 2",
+            "--bronze-dir",
+            str(FIXTURES),
+            "--embedding-backend",
+            "hashing",
+            "--vector-backend",
+            "memory",
+            "--top-k",
+            "3",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    lines = result.stdout.strip().split("\n")
+    # 1re ligne = en-tête ; 2e ligne = meilleur candidat -> doit être 201826 + score.
+    assert "201826" in lines[1]
+    assert "0." in lines[1]

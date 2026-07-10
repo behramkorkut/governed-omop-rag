@@ -131,5 +131,74 @@ def route(
     typer.echo(f"justification     : {suggestion.justification}")
 
 
+@app.command()
+def search(
+    query: Annotated[str, typer.Argument(help="Libellé ou code à rechercher.")],
+    bronze_dir: Annotated[
+        Path | None,
+        typer.Option(help="Répertoire des fichiers OHDSI bruts (défaut: config)."),
+    ] = None,
+    top_k: Annotated[int, typer.Option(help="Nombre de candidats.")] = 5,
+    embedding_backend: Annotated[
+        str | None,
+        typer.Option(help="hashing (offline) ou sentence_transformers (défaut: config)."),
+    ] = None,
+    vector_backend: Annotated[
+        str | None,
+        typer.Option(help="memory (offline) ou qdrant (défaut: config)."),
+    ] = None,
+) -> None:
+    """Recherche dense end-to-end : construit le corpus, l'indexe, cherche les top-k.
+
+    Astuce démo hors-ligne : --embedding-backend hashing --vector-backend memory.
+
+    NB : cette commande reconstruit le corpus en mémoire à CHAQUE appel (pratique
+    pour la démo « essayez en 2 minutes »). En production, on réutilisera le
+    DuckDB persisté et un index Qdrant déjà peuplé plutôt que de tout reconstruire.
+    """
+    from governed_omop_rag.medallion.db import connect
+    from governed_omop_rag.medallion.gold import fetch_gold
+    from governed_omop_rag.medallion.pipeline import build_corpus
+    from governed_omop_rag.retrieval.embeddings import (
+        HashingEmbedder,
+        SentenceTransformerEmbedder,
+    )
+    from governed_omop_rag.retrieval.factory import get_vectorstore
+    from governed_omop_rag.retrieval.index import index_gold, search_concepts
+    from governed_omop_rag.retrieval.vectorstore import MemoryVectorStore
+
+    settings = get_settings()
+    src = bronze_dir or settings.bronze_dir
+    emb = embedding_backend or settings.embedding_backend.value
+    vec = vector_backend or settings.vector_backend.value
+
+    embedder = (
+        HashingEmbedder(settings.embedding_dim)
+        if emb == "hashing"
+        else SentenceTransformerEmbedder(settings.embedding_model, settings.embedding_device)
+    )
+    store = MemoryVectorStore() if vec == "memory" else get_vectorstore(settings)
+
+    con = connect(":memory:")
+    try:
+        build_corpus(con, src)
+        gold = fetch_gold(con)
+    finally:
+        con.close()
+
+    n = index_gold(gold, embedder, store)
+    candidates = search_concepts(query, embedder, store, top_k=top_k)
+
+    typer.echo(f"Requête : {query!r}  (indexés: {n}, backend: {emb}/{vec})")
+    if not candidates:
+        typer.echo("Aucun candidat.")
+        return
+    for rank, c in enumerate(candidates, start=1):
+        typer.echo(
+            f"  {rank}. [{c.score:.3f}] concept_id={c.concept_id} "
+            f"{c.concept_name} ({c.vocabulary_id}/{c.domain_id})"
+        )
+
+
 if __name__ == "__main__":
     app()

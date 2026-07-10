@@ -38,6 +38,14 @@ class VectorBackend(StrEnum):
     MEMORY = "memory"
 
 
+class EmbeddingBackend(StrEnum):
+    """Implémentation d'embeddings derrière le protocole Embedder."""
+
+    SENTENCE_TRANSFORMERS = "sentence_transformers"
+    # Déterministe et hors-ligne (tests / dev sans téléchargement de modèle).
+    HASHING = "hashing"
+
+
 class Settings(BaseSettings):
     """Paramètres applicatifs chargés depuis l'environnement / ``.env``."""
 
@@ -64,8 +72,11 @@ class Settings(BaseSettings):
     qdrant_collection: str = "ohdsi_concepts"
 
     # --- Embeddings biomédicaux locaux (Phase 1) ---
+    embedding_backend: EmbeddingBackend = EmbeddingBackend.SENTENCE_TRANSFORMERS
     embedding_model: str = "FremyCompany/BioLORD-2023"
     embedding_device: str = "cpu"
+    # Dimension utilisée par le backend hashing (le modèle réel fixe la sienne).
+    embedding_dim: int = Field(default=256, ge=8, le=4096)
 
     # --- Corpus médaillon (couche data) ---
     data_dir: Path = Path("data")
