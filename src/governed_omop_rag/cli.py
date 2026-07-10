@@ -64,6 +64,10 @@ def build_corpus_cmd(
         list[str] | None,
         typer.Option(help="Filtre domain_id (répétable), ex. --domain Condition."),
     ] = None,
+    encoding: Annotated[
+        str,
+        typer.Option(help="Encodage des CSV OHDSI (latin-1/cp1252 pour un export FR)."),
+    ] = "utf-8",
 ) -> None:
     """Construit le corpus médaillon Bronze -> Silver -> Gold (couche data)."""
     from governed_omop_rag.medallion.pipeline import run_pipeline
@@ -71,7 +75,7 @@ def build_corpus_cmd(
     settings = get_settings()
     src = bronze_dir or settings.bronze_dir
     out = duckdb_path or settings.duckdb_path
-    stats = run_pipeline(src, out, domains=domain or None)
+    stats = run_pipeline(src, out, domains=domain or None, encoding=encoding)
 
     log = get_logger("build-corpus")
     log.info(
@@ -88,6 +92,43 @@ def build_corpus_cmd(
         f"  Silver : {stats.silver_concepts} concepts (standard + valides)\n"
         f"  Gold   : {stats.gold_concepts} documents embedding-ready"
     )
+
+
+@app.command()
+def route(
+    source_code: Annotated[
+        str | None,
+        typer.Option(help="Code source à mapper, ex. E11.9 (CIM-10 FR)."),
+    ] = None,
+    source_vocabulary: Annotated[
+        str | None,
+        typer.Option(help="Vocabulaire source, ex. ICD10FR."),
+    ] = None,
+    map_path: Annotated[
+        Path | None,
+        typer.Option(help="Chemin de l'alignement officiel CSV (défaut: config)."),
+    ] = None,
+) -> None:
+    """Route un code source via l'alignement officiel (match déterministe, v1)."""
+    from governed_omop_rag.core.models import MappingRequest
+    from governed_omop_rag.router.deterministic import OfficialMap, route_deterministic
+
+    if not source_code:
+        typer.echo("Erreur : --source-code est requis.", err=True)
+        raise typer.Exit(code=2)
+
+    settings = get_settings()
+    official_map = OfficialMap.from_csv(map_path or settings.router_map_path)
+    request = MappingRequest(source_code=source_code, source_vocabulary=source_vocabulary)
+    suggestion = route_deterministic(request, official_map)
+
+    typer.echo(f"source_code       : {source_code}")
+    typer.echo(f"target_concept_id : {suggestion.target_concept_id}")
+    typer.echo(f"source            : {suggestion.source.value}")
+    typer.echo(f"confidence        : {suggestion.confidence}")
+    if suggestion.no_map_reason is not None:
+        typer.echo(f"no_map_reason     : {suggestion.no_map_reason.value}")
+    typer.echo(f"justification     : {suggestion.justification}")
 
 
 if __name__ == "__main__":

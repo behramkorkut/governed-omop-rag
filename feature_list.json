@@ -5,109 +5,505 @@
     "workflow": "Fable 5 génère le code + tests ; Kimi exécute, teste les edge cases, et flip 'passes' après validation ; l'auteur gère git.",
     "passes": "false = non fait ou non vérifié ; true = implémenté ET vérifié réellement."
   },
-  "current_phase": 0,
+  "current_phase": 1,
   "features": [
-    {"id": "P0-1", "phase": 0, "title": "Arborescence + package skeleton", "passes": false,
-     "acceptance": ["src/governed_omop_rag existe avec sous-paquets core/medallion/retrieval/agents/router/api/ui/eval", "chaque sous-paquet a un __init__.py documentant son rôle", "import governed_omop_rag réussit"]},
-    {"id": "P0-2", "phase": 0, "title": "Outillage uv + qualité (ruff, mypy, pytest)", "passes": false,
-     "acceptance": ["pyproject.toml géré par uv avec deps cœur + groupes optionnels par phase", "ruff, mypy, pytest configurés", "uv sync installe l'environnement sans erreur"]},
-    {"id": "P0-3", "phase": 0, "title": "Config typée (pydantic-settings)", "passes": false,
-     "acceptance": ["Settings charge les variables GOR_* et .env", "défauts raisonnables pour toutes les clés", "get_settings() est mémoïsé (singleton)"]},
-    {"id": "P0-4", "phase": 0, "title": "Logging structuré + schémas domaine core", "passes": false,
-     "acceptance": ["configure_logging idempotent", "MappingRequest exige code ou libellé", "MappingSuggestion gère concept_id=0 + no_map_reason typée", "cohérence validée par model_validator"]},
-    {"id": "P0-5", "phase": 0, "title": "CLI gor (version/info/smoke)", "passes": false,
-     "acceptance": ["commande gor version affiche la version", "gor info résume la config sans secrets", "gor smoke sort en code 0 sur env sain"]},
-    {"id": "P0-6", "phase": 0, "title": "init.sh idempotent + smoke-test", "passes": false,
-     "acceptance": ["init.sh installe l'env via uv", "peut tourner 2x sans casser (idempotent)", "lance un smoke-test qui échoue proprement si l'env est cassé"]},
-    {"id": "P0-7", "phase": 0, "title": "Harness : feature_list.json + progress.txt", "passes": false,
-     "acceptance": ["feature_list.json valide et exhaustif (toutes phases)", "progress.txt journalise chaque session"]},
-    {"id": "P0-8", "phase": 0, "title": "README squelette", "passes": false,
-     "acceptance": ["README explique le but, le quickstart, la structure", "un tiers peut cloner et comprendre le projet"]},
-    {"id": "P0-9", "phase": 0, "title": "CI GitHub Actions (lint + type + test)", "passes": false,
-     "acceptance": ["workflow CI exécute ruff, mypy et pytest sur push/PR", "matrice Python 3.11", "échoue si un test échoue"]},
-    {"id": "P0-10", "phase": 0, "title": "Docker de base (Dockerfile + compose Qdrant)", "passes": false,
-     "acceptance": ["Dockerfile build l'app", "docker-compose lance un service Qdrant local pour le dev", "volumes persistants"]},
-
-    {"id": "P1-1", "phase": 1, "title": "Bronze : ingestion OHDSI (Athena) + CIM-10 FR", "passes": false,
-     "acceptance": ["télécharge/charge CONCEPT.csv, CONCEPT_SYNONYM.csv, CONCEPT_RELATIONSHIP.csv", "charge la table CIM-10 FR (ATIH)", "données brutes stockées en Bronze"]},
-    {"id": "P1-2", "phase": 1, "title": "Silver : filtrage (standard='S', valides) + normalisation", "passes": false,
-     "acceptance": ["ne garde que standard_concept='S' et invalid_reason IS NULL", "domaines pertinents (Condition/SNOMED d'abord)", "normalisation texte (casse, accents FR)"]},
-    {"id": "P1-3", "phase": 1, "title": "Gold : documents embedding-ready", "passes": false,
-     "acceptance": ["un concept = nom + synonymes + domaine + vocabulaire concaténés", "sortie prête à vectoriser"]},
-    {"id": "P1-4", "phase": 1, "title": "Staging DuckDB + vues médaillon", "passes": false,
-     "acceptance": ["DuckDB héberge Bronze/Silver/Gold en tables/vues", "transformations Python (pas d'ETL orchestré)"]},
-    {"id": "P1-5", "phase": 1, "title": "Embeddings BioLORD locaux (batch)", "passes": false,
-     "acceptance": ["embeddings calculés en local (aucun envoi tiers)", "batch reproductible", "dimension et modèle configurables"]},
-    {"id": "P1-6", "phase": 1, "title": "Interface VectorStore + implémentation Qdrant", "passes": false,
-     "acceptance": ["interface VectorStore abstraite", "implémentation Qdrant (upsert + search)", "collection créée idempotente", "backend switchable via config"]},
-    {"id": "P1-7", "phase": 1, "title": "Router déterministe v1 (map officielle exacte)", "passes": false,
-     "acceptance": ["match exact via alignement officiel CIM-10<->SNOMED-CT", "renvoie source=official_map avec confiance 1.0", "baseline mesurable"]},
-
-    {"id": "P2-1", "phase": 2, "title": "Router complet (déterministe -> RAG sur résidu)", "passes": false,
-     "acceptance": ["route les cas couverts en déterministe", "n'envoie au RAG que le résidu", "borne le coût API"]},
-    {"id": "P2-2", "phase": 2, "title": "Recherche hybride BM25 + dense", "passes": false,
-     "acceptance": ["fusion lexical (BM25) + dense (BioLORD)", "top-k candidats retournés", "scores normalisés"]},
-    {"id": "P2-3", "phase": 2, "title": "Expansion de requête (synonymes cliniques)", "passes": false,
-     "acceptance": ["expansion des libellés FR par synonymes", "améliore recall@k mesuré"]},
-    {"id": "P2-4", "phase": 2, "title": "Reranking cross-encoder", "passes": false,
-     "acceptance": ["reranking des candidats par cross-encoder", "top-k reclassé injecté (contexte minimal haut signal)"]},
-    {"id": "P2-5", "phase": 2, "title": "Gold set de régression + recall@k", "passes": false,
-     "acceptance": ["gold set 50-100 mappings CIM-10 FR->SNOMED", "test de régression exécuté à chaque commit", "recall@k reporté"]},
-    {"id": "P2-6", "phase": 2, "title": "Cache local des résultats", "passes": false,
-     "acceptance": ["même libellé/source -> pas de nouvel appel API", "cache DuckDB", "invalidable par version de vocabulaire"]},
-
-    {"id": "P3-1", "phase": 3, "title": "Graphe orchestrateur LangGraph", "passes": false,
-     "acceptance": ["graphe LangGraph orchestre le flux top-k -> décision", "état typé"]},
-    {"id": "P3-2", "phase": 3, "title": "Agent Proposer (Claude)", "passes": false,
-     "acceptance": ["choisit un candidat parmi le top-k et justifie", "prompt spécialisé raisonnement clinique"]},
-    {"id": "P3-3", "phase": 3, "title": "Sous-agent Vérificateur (boîte noire)", "passes": false,
-     "acceptance": ["vérifie existence, standard_concept='S', domaine cohérent", "retourne PASS/FAIL sans historique d'implémentation"]},
-    {"id": "P3-4", "phase": 3, "title": "Garde-fou sortie fermée", "passes": false,
-     "acceptance": ["toute proposition hors-vocabulaire est rejetée structurellement", "impossible de retourner un concept_id inexistant"]},
-    {"id": "P3-5", "phase": 3, "title": "Boucle de correction bornée", "passes": false,
-     "acceptance": ["max N essais (ex. 3) Proposer<->Vérificateur", "arrêt propre si échec persistant"]},
-    {"id": "P3-6", "phase": 3, "title": "Gestion non-mappé explicite", "passes": false,
-     "acceptance": ["concept_id=0 + no_map_reason (HORS_VOCABULAIRE/AMBIGU/CONFIDENCE_INSUFFISANTE)", "jamais de mapping forcé"]},
-
-    {"id": "P4-1", "phase": 4, "title": "FastAPI /map", "passes": false,
-     "acceptance": ["une entrée -> candidats + suggestion", "OpenAPI documentée", "validation Pydantic"]},
-    {"id": "P4-2", "phase": 4, "title": "FastAPI /map/batch (strategy)", "passes": false,
-     "acceptance": ["un fichier/liste -> suggestions", "option strategy: deterministic_only|full_rag|auto"]},
-    {"id": "P4-3", "phase": 4, "title": "UI Streamlit revue steward", "passes": false,
-     "acceptance": ["import CSV/Excel", "revue en lot accepter/rejeter/éditer", "session_state robuste (pagination)"]},
-    {"id": "P4-4", "phase": 4, "title": "Export source_to_concept_map + CSV", "passes": false,
-     "acceptance": ["export au format OMOP source_to_concept_map", "export CSV"]},
-    {"id": "P4-5", "phase": 4, "title": "Table steward_feedback", "passes": false,
-     "acceptance": ["stocke entrée/proposition/correction/raison", "réutilisable pour amélioration continue"]},
-    {"id": "P4-6", "phase": 4, "title": "docs/guide_utilisateur.md (FR, non-technique)", "passes": false,
-     "acceptance": ["guide non-technique en français avec captures", "parcours 'essayez en 2 minutes'"]},
-
-    {"id": "P5-1", "phase": 5, "title": "Gold set CIM-10 FR -> SNOMED", "passes": false,
-     "acceptance": ["50-100 mappings annotés/officiels comme vérité terrain"]},
-    {"id": "P5-2", "phase": 5, "title": "Métriques Top-1/Top-5 + couverture", "passes": false,
-     "acceptance": ["Top-1 et Top-5 accuracy calculés", "couverture (>= seuil) et concept_id=0 résiduel"]},
-    {"id": "P5-3", "phase": 5, "title": "Faithfulness (style RAGAS)", "passes": false,
-     "acceptance": ["la justification s'appuie sur les candidats fournis, pas hors-contexte"]},
-    {"id": "P5-4", "phase": 5, "title": "Taux d'hallucination", "passes": false,
-     "acceptance": ["mesure des propositions hors-vocabulaire/non-standard", "tend vers 0 grâce au garde-fou"]},
-    {"id": "P5-5", "phase": 5, "title": "Coût & latence par mapping", "passes": false,
-     "acceptance": ["tokens et $ par mapping", "temps par concept comparable à Llettuce (~8,7 s)"]},
-    {"id": "P5-6", "phase": 5, "title": "Benchmark vs Usagi + docs/evaluation.md", "passes": false,
-     "acceptance": ["comparatif reproductible outil vs baseline Usagi", "tableau de résultats dans docs/evaluation.md"]},
-
-    {"id": "P6-1", "phase": 6, "title": "Suite pytest complète (unit + intégration + edge)", "passes": false,
-     "acceptance": ["tests unitaires, d'intégration et edge cases", "pas de test factice (assert True), pas de mock masquant un bug"]},
-    {"id": "P6-2", "phase": 6, "title": "CI complète (coverage gate)", "passes": false,
-     "acceptance": ["CI exécute toute la suite", "seuil de couverture appliqué"]},
-    {"id": "P6-3", "phase": 6, "title": "docker-compose multi-services", "passes": false,
-     "acceptance": ["api + ui + qdrant orchestrés", "docker compose up lance le pipeline en une commande"]},
-    {"id": "P6-4", "phase": 6, "title": "docs (architecture mermaid, governance, souverainete, ia_act)", "passes": false,
-     "acceptance": ["docs/governance.md, docs/souverainete.md, docs/ia_act.md", "schéma mermaid d'architecture"]},
-    {"id": "P6-5", "phase": 6, "title": "README badges + GIF démo", "passes": false,
-     "acceptance": ["badges CI/licence", "GIF de démo, schéma, chiffres d'éval honnêtes"]},
-    {"id": "P6-6", "phase": 6, "title": "Boucle de réinjection vers synthea-to-omop-fhir", "passes": false,
-     "acceptance": ["export réutilisable pour combler concept_id=0 du projet amont"]},
-    {"id": "P6-7", "phase": 6, "title": "Démo hébergée publique", "passes": false,
-     "acceptance": ["lien cliquable (Streamlit Cloud ou VPS souverain)", "jeu d'exemples prêt à l'emploi"]}
+    {
+      "id": "P0-1",
+      "phase": 0,
+      "title": "Arborescence + package skeleton",
+      "passes": true,
+      "acceptance": [
+        "src/governed_omop_rag existe avec sous-paquets core/medallion/retrieval/agents/router/api/ui/eval",
+        "chaque sous-paquet a un __init__.py documentant son rôle",
+        "import governed_omop_rag réussit"
+      ]
+    },
+    {
+      "id": "P0-2",
+      "phase": 0,
+      "title": "Outillage uv + qualité (ruff, mypy, pytest)",
+      "passes": true,
+      "acceptance": [
+        "pyproject.toml géré par uv avec deps cœur + groupes optionnels par phase",
+        "ruff, mypy, pytest configurés",
+        "uv sync installe l'environnement sans erreur"
+      ]
+    },
+    {
+      "id": "P0-3",
+      "phase": 0,
+      "title": "Config typée (pydantic-settings)",
+      "passes": true,
+      "acceptance": [
+        "Settings charge les variables GOR_* et .env",
+        "défauts raisonnables pour toutes les clés",
+        "get_settings() est mémoïsé (singleton)"
+      ]
+    },
+    {
+      "id": "P0-4",
+      "phase": 0,
+      "title": "Logging structuré + schémas domaine core",
+      "passes": true,
+      "acceptance": [
+        "configure_logging idempotent",
+        "MappingRequest exige code ou libellé",
+        "MappingSuggestion gère concept_id=0 + no_map_reason typée",
+        "cohérence validée par model_validator"
+      ]
+    },
+    {
+      "id": "P0-5",
+      "phase": 0,
+      "title": "CLI gor (version/info/smoke)",
+      "passes": true,
+      "acceptance": [
+        "commande gor version affiche la version",
+        "gor info résume la config sans secrets",
+        "gor smoke sort en code 0 sur env sain"
+      ]
+    },
+    {
+      "id": "P0-6",
+      "phase": 0,
+      "title": "init.sh idempotent + smoke-test",
+      "passes": true,
+      "acceptance": [
+        "init.sh installe l'env via uv",
+        "peut tourner 2x sans casser (idempotent)",
+        "lance un smoke-test qui échoue proprement si l'env est cassé"
+      ]
+    },
+    {
+      "id": "P0-7",
+      "phase": 0,
+      "title": "Harness : feature_list.json + progress.txt",
+      "passes": true,
+      "acceptance": [
+        "feature_list.json valide et exhaustif (toutes phases)",
+        "progress.txt journalise chaque session"
+      ]
+    },
+    {
+      "id": "P0-8",
+      "phase": 0,
+      "title": "README squelette",
+      "passes": true,
+      "acceptance": [
+        "README explique le but, le quickstart, la structure",
+        "un tiers peut cloner et comprendre le projet"
+      ]
+    },
+    {
+      "id": "P0-9",
+      "phase": 0,
+      "title": "CI GitHub Actions (lint + type + test)",
+      "passes": true,
+      "acceptance": [
+        "workflow CI exécute ruff, mypy et pytest sur push/PR",
+        "matrice Python 3.11",
+        "échoue si un test échoue"
+      ]
+    },
+    {
+      "id": "P0-10",
+      "phase": 0,
+      "title": "Docker de base (Dockerfile + compose Qdrant)",
+      "passes": true,
+      "acceptance": [
+        "Dockerfile build l'app",
+        "docker-compose lance un service Qdrant local pour le dev",
+        "volumes persistants"
+      ]
+    },
+    {
+      "id": "P1-1",
+      "phase": 1,
+      "title": "Bronze : ingestion OHDSI (Athena) + CIM-10 FR",
+      "passes": true,
+      "acceptance": [
+        "télécharge/charge CONCEPT.csv, CONCEPT_SYNONYM.csv, CONCEPT_RELATIONSHIP.csv",
+        "charge la table CIM-10 FR (ATIH)",
+        "données brutes stockées en Bronze"
+      ]
+    },
+    {
+      "id": "P1-2",
+      "phase": 1,
+      "title": "Silver : filtrage (standard='S', valides) + normalisation",
+      "passes": true,
+      "acceptance": [
+        "ne garde que standard_concept='S' et invalid_reason IS NULL",
+        "domaines pertinents (Condition/SNOMED d'abord)",
+        "normalisation texte (casse, accents FR)"
+      ]
+    },
+    {
+      "id": "P1-3",
+      "phase": 1,
+      "title": "Gold : documents embedding-ready",
+      "passes": true,
+      "acceptance": [
+        "un concept = nom + synonymes + domaine + vocabulaire concaténés",
+        "sortie prête à vectoriser"
+      ]
+    },
+    {
+      "id": "P1-4",
+      "phase": 1,
+      "title": "Staging DuckDB + vues médaillon",
+      "passes": true,
+      "acceptance": [
+        "DuckDB héberge Bronze/Silver/Gold en tables/vues",
+        "transformations Python (pas d'ETL orchestré)"
+      ]
+    },
+    {
+      "id": "P1-5",
+      "phase": 1,
+      "title": "Embeddings BioLORD locaux (batch)",
+      "passes": false,
+      "acceptance": [
+        "embeddings calculés en local (aucun envoi tiers)",
+        "batch reproductible",
+        "dimension et modèle configurables"
+      ]
+    },
+    {
+      "id": "P1-6",
+      "phase": 1,
+      "title": "Interface VectorStore + implémentation Qdrant",
+      "passes": false,
+      "acceptance": [
+        "interface VectorStore abstraite",
+        "implémentation Qdrant (upsert + search)",
+        "collection créée idempotente",
+        "backend switchable via config"
+      ]
+    },
+    {
+      "id": "P1-7",
+      "phase": 1,
+      "title": "Router déterministe v1 (map officielle exacte)",
+      "passes": true,
+      "acceptance": [
+        "match exact via alignement officiel CIM-10<->SNOMED-CT",
+        "renvoie source=official_map avec confiance 1.0",
+        "baseline mesurable"
+      ]
+    },
+    {
+      "id": "P2-1",
+      "phase": 2,
+      "title": "Router complet (déterministe -> RAG sur résidu)",
+      "passes": false,
+      "acceptance": [
+        "route les cas couverts en déterministe",
+        "n'envoie au RAG que le résidu",
+        "borne le coût API"
+      ]
+    },
+    {
+      "id": "P2-2",
+      "phase": 2,
+      "title": "Recherche hybride BM25 + dense",
+      "passes": false,
+      "acceptance": [
+        "fusion lexical (BM25) + dense (BioLORD)",
+        "top-k candidats retournés",
+        "scores normalisés"
+      ]
+    },
+    {
+      "id": "P2-3",
+      "phase": 2,
+      "title": "Expansion de requête (synonymes cliniques)",
+      "passes": false,
+      "acceptance": [
+        "expansion des libellés FR par synonymes",
+        "améliore recall@k mesuré"
+      ]
+    },
+    {
+      "id": "P2-4",
+      "phase": 2,
+      "title": "Reranking cross-encoder",
+      "passes": false,
+      "acceptance": [
+        "reranking des candidats par cross-encoder",
+        "top-k reclassé injecté (contexte minimal haut signal)"
+      ]
+    },
+    {
+      "id": "P2-5",
+      "phase": 2,
+      "title": "Gold set de régression + recall@k",
+      "passes": false,
+      "acceptance": [
+        "gold set 50-100 mappings CIM-10 FR->SNOMED",
+        "test de régression exécuté à chaque commit",
+        "recall@k reporté"
+      ]
+    },
+    {
+      "id": "P2-6",
+      "phase": 2,
+      "title": "Cache local des résultats",
+      "passes": false,
+      "acceptance": [
+        "même libellé/source -> pas de nouvel appel API",
+        "cache DuckDB",
+        "invalidable par version de vocabulaire"
+      ]
+    },
+    {
+      "id": "P3-1",
+      "phase": 3,
+      "title": "Graphe orchestrateur LangGraph",
+      "passes": false,
+      "acceptance": [
+        "graphe LangGraph orchestre le flux top-k -> décision",
+        "état typé"
+      ]
+    },
+    {
+      "id": "P3-2",
+      "phase": 3,
+      "title": "Agent Proposer (Claude)",
+      "passes": false,
+      "acceptance": [
+        "choisit un candidat parmi le top-k et justifie",
+        "prompt spécialisé raisonnement clinique"
+      ]
+    },
+    {
+      "id": "P3-3",
+      "phase": 3,
+      "title": "Sous-agent Vérificateur (boîte noire)",
+      "passes": false,
+      "acceptance": [
+        "vérifie existence, standard_concept='S', domaine cohérent",
+        "retourne PASS/FAIL sans historique d'implémentation"
+      ]
+    },
+    {
+      "id": "P3-4",
+      "phase": 3,
+      "title": "Garde-fou sortie fermée",
+      "passes": false,
+      "acceptance": [
+        "toute proposition hors-vocabulaire est rejetée structurellement",
+        "impossible de retourner un concept_id inexistant"
+      ]
+    },
+    {
+      "id": "P3-5",
+      "phase": 3,
+      "title": "Boucle de correction bornée",
+      "passes": false,
+      "acceptance": [
+        "max N essais (ex. 3) Proposer<->Vérificateur",
+        "arrêt propre si échec persistant"
+      ]
+    },
+    {
+      "id": "P3-6",
+      "phase": 3,
+      "title": "Gestion non-mappé explicite",
+      "passes": false,
+      "acceptance": [
+        "concept_id=0 + no_map_reason (HORS_VOCABULAIRE/AMBIGU/CONFIDENCE_INSUFFISANTE)",
+        "jamais de mapping forcé"
+      ]
+    },
+    {
+      "id": "P4-1",
+      "phase": 4,
+      "title": "FastAPI /map",
+      "passes": false,
+      "acceptance": [
+        "une entrée -> candidats + suggestion",
+        "OpenAPI documentée",
+        "validation Pydantic"
+      ]
+    },
+    {
+      "id": "P4-2",
+      "phase": 4,
+      "title": "FastAPI /map/batch (strategy)",
+      "passes": false,
+      "acceptance": [
+        "un fichier/liste -> suggestions",
+        "option strategy: deterministic_only|full_rag|auto"
+      ]
+    },
+    {
+      "id": "P4-3",
+      "phase": 4,
+      "title": "UI Streamlit revue steward",
+      "passes": false,
+      "acceptance": [
+        "import CSV/Excel",
+        "revue en lot accepter/rejeter/éditer",
+        "session_state robuste (pagination)"
+      ]
+    },
+    {
+      "id": "P4-4",
+      "phase": 4,
+      "title": "Export source_to_concept_map + CSV",
+      "passes": false,
+      "acceptance": [
+        "export au format OMOP source_to_concept_map",
+        "export CSV"
+      ]
+    },
+    {
+      "id": "P4-5",
+      "phase": 4,
+      "title": "Table steward_feedback",
+      "passes": false,
+      "acceptance": [
+        "stocke entrée/proposition/correction/raison",
+        "réutilisable pour amélioration continue"
+      ]
+    },
+    {
+      "id": "P4-6",
+      "phase": 4,
+      "title": "docs/guide_utilisateur.md (FR, non-technique)",
+      "passes": false,
+      "acceptance": [
+        "guide non-technique en français avec captures",
+        "parcours 'essayez en 2 minutes'"
+      ]
+    },
+    {
+      "id": "P5-1",
+      "phase": 5,
+      "title": "Gold set CIM-10 FR -> SNOMED",
+      "passes": false,
+      "acceptance": [
+        "50-100 mappings annotés/officiels comme vérité terrain"
+      ]
+    },
+    {
+      "id": "P5-2",
+      "phase": 5,
+      "title": "Métriques Top-1/Top-5 + couverture",
+      "passes": false,
+      "acceptance": [
+        "Top-1 et Top-5 accuracy calculés",
+        "couverture (>= seuil) et concept_id=0 résiduel"
+      ]
+    },
+    {
+      "id": "P5-3",
+      "phase": 5,
+      "title": "Faithfulness (style RAGAS)",
+      "passes": false,
+      "acceptance": [
+        "la justification s'appuie sur les candidats fournis, pas hors-contexte"
+      ]
+    },
+    {
+      "id": "P5-4",
+      "phase": 5,
+      "title": "Taux d'hallucination",
+      "passes": false,
+      "acceptance": [
+        "mesure des propositions hors-vocabulaire/non-standard",
+        "tend vers 0 grâce au garde-fou"
+      ]
+    },
+    {
+      "id": "P5-5",
+      "phase": 5,
+      "title": "Coût & latence par mapping",
+      "passes": false,
+      "acceptance": [
+        "tokens et $ par mapping",
+        "temps par concept comparable à Llettuce (~8,7 s)"
+      ]
+    },
+    {
+      "id": "P5-6",
+      "phase": 5,
+      "title": "Benchmark vs Usagi + docs/evaluation.md",
+      "passes": false,
+      "acceptance": [
+        "comparatif reproductible outil vs baseline Usagi",
+        "tableau de résultats dans docs/evaluation.md"
+      ]
+    },
+    {
+      "id": "P6-1",
+      "phase": 6,
+      "title": "Suite pytest complète (unit + intégration + edge)",
+      "passes": false,
+      "acceptance": [
+        "tests unitaires, d'intégration et edge cases",
+        "pas de test factice (assert True), pas de mock masquant un bug"
+      ]
+    },
+    {
+      "id": "P6-2",
+      "phase": 6,
+      "title": "CI complète (coverage gate)",
+      "passes": false,
+      "acceptance": [
+        "CI exécute toute la suite",
+        "seuil de couverture appliqué"
+      ]
+    },
+    {
+      "id": "P6-3",
+      "phase": 6,
+      "title": "docker-compose multi-services",
+      "passes": false,
+      "acceptance": [
+        "api + ui + qdrant orchestrés",
+        "docker compose up lance le pipeline en une commande"
+      ]
+    },
+    {
+      "id": "P6-4",
+      "phase": 6,
+      "title": "docs (architecture mermaid, governance, souverainete, ia_act)",
+      "passes": false,
+      "acceptance": [
+        "docs/governance.md, docs/souverainete.md, docs/ia_act.md",
+        "schéma mermaid d'architecture"
+      ]
+    },
+    {
+      "id": "P6-5",
+      "phase": 6,
+      "title": "README badges + GIF démo",
+      "passes": false,
+      "acceptance": [
+        "badges CI/licence",
+        "GIF de démo, schéma, chiffres d'éval honnêtes"
+      ]
+    },
+    {
+      "id": "P6-6",
+      "phase": 6,
+      "title": "Boucle de réinjection vers synthea-to-omop-fhir",
+      "passes": false,
+      "acceptance": [
+        "export réutilisable pour combler concept_id=0 du projet amont"
+      ]
+    },
+    {
+      "id": "P6-7",
+      "phase": 6,
+      "title": "Démo hébergée publique",
+      "passes": false,
+      "acceptance": [
+        "lien cliquable (Streamlit Cloud ou VPS souverain)",
+        "jeu d'exemples prêt à l'emploi"
+      ]
+    }
   ]
 }

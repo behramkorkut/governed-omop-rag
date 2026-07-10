@@ -36,9 +36,13 @@ def build_corpus(
     con: duckdb.DuckDBPyConnection,
     bronze_dir: str | Path,
     domains: Iterable[str] | None = None,
+    encoding: str = "utf-8",
 ) -> CorpusStats:
-    """Exécute Bronze -> Silver -> Gold sur la connexion fournie."""
-    counts = load_bronze(con, bronze_dir)
+    """Exécute Bronze -> Silver -> Gold sur la connexion fournie.
+
+    ``encoding`` : encodage des CSV OHDSI ('latin-1'/'cp1252' pour un export FR).
+    """
+    counts = load_bronze(con, bronze_dir, encoding)
     silver_n = build_silver(con, domains)
     gold_n = build_gold(con)
     return CorpusStats(
@@ -53,6 +57,7 @@ def run_pipeline(
     bronze_dir: str | Path,
     duckdb_path: str | Path = ":memory:",
     domains: Iterable[str] | None = None,
+    encoding: str = "utf-8",
 ) -> CorpusStats:
     """Ouvre une connexion (fichier persistant ou mémoire), construit, ferme.
 
@@ -61,6 +66,6 @@ def run_pipeline(
     """
     con = connect(duckdb_path)
     try:
-        return build_corpus(con, bronze_dir, domains)
+        return build_corpus(con, bronze_dir, domains, encoding)
     finally:
         con.close()

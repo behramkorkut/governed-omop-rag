@@ -51,3 +51,34 @@ def test_build_corpus_command(tmp_path: Path) -> None:
     assert "Corpus construit" in result.stdout
     assert "Gold" in result.stdout
     assert db.exists()  # le fichier DuckDB a bien été créé
+
+
+def _write_map(tmp_path: Path) -> Path:
+    csv = tmp_path / "map.csv"
+    csv.write_text(
+        "source_code,target_concept_id\nE11.9,201826\n",
+        encoding="utf-8",
+    )
+    return csv
+
+
+def test_route_command_found(tmp_path: Path) -> None:
+    csv = _write_map(tmp_path)
+    result = runner.invoke(app, ["route", "--source-code", "E11.9", "--map-path", str(csv)])
+    assert result.exit_code == 0, result.output
+    assert "201826" in result.stdout
+    assert "official_map" in result.stdout
+
+
+def test_route_command_not_found(tmp_path: Path) -> None:
+    csv = _write_map(tmp_path)
+    result = runner.invoke(app, ["route", "--source-code", "Z99.9", "--map-path", str(csv)])
+    assert result.exit_code == 0, result.output
+    assert "target_concept_id : 0" in result.stdout
+    assert "hors_vocabulaire" in result.stdout
+
+
+def test_route_command_requires_source_code(tmp_path: Path) -> None:
+    csv = _write_map(tmp_path)
+    result = runner.invoke(app, ["route", "--map-path", str(csv)])
+    assert result.exit_code == 2  # --source-code requis

@@ -300,3 +300,18 @@ def test_bronze_reads_latin1_encoding(tmp_path: Path) -> None:
         assert name2 == "hypertension artérielle"
     finally:
         c.close()
+
+
+def test_pipeline_propagates_encoding(tmp_path: Path) -> None:
+    """L'encodage passé à run_pipeline atteint bien le loader Bronze (Latin-1)."""
+    bronze = tmp_path / "bronze"
+    _write_bronze(bronze, [_std_condition(1, "diabète")], encoding="latin-1")
+    db = tmp_path / "corpus.duckdb"
+    stats = run_pipeline(bronze, db, encoding="latin-1")
+    assert stats.gold_concepts == 1
+    c = connect(db)
+    try:
+        name = _scalar(c, f"SELECT concept_name FROM {BRONZE_CONCEPT} WHERE concept_id = 1")
+        assert name == "diabète"
+    finally:
+        c.close()
