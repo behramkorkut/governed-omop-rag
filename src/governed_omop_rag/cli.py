@@ -228,6 +228,9 @@ def map_cmd(
         typer.Option(help="Décide via l'agent gouverné (Proposer -> Vérificateur)."),
     ] = False,
     llm: Annotated[str, typer.Option(help="LLM du Proposer : fake (offline) | claude.")] = "fake",
+    engine: Annotated[
+        str, typer.Option(help="Orchestrateur agent : simple | langgraph.")
+    ] = "simple",
     cache: Annotated[
         bool, typer.Option(help="Active le cache de retrieval (borne coût/latence).")
     ] = False,
@@ -239,6 +242,7 @@ def map_cmd(
 
     Démo offline : --embedding-backend hashing --vector-backend memory.
     """
+    from governed_omop_rag.agents.orchestrator import Agent
     from governed_omop_rag.core.models import MappingRequest
     from governed_omop_rag.medallion.db import connect
     from governed_omop_rag.medallion.gold import fetch_gold
@@ -289,8 +293,9 @@ def map_cmd(
         cached = CachedRetriever(retriever_obj, cache_obj, namespace=embedder.model_name)
         retriever_obj = cached
 
-    mapping_agent = None
+    mapping_agent: Agent | None = None
     if agent:
+        from governed_omop_rag.agents.graph import LangGraphMappingAgent
         from governed_omop_rag.agents.llm import ClaudeProposerLLM, FakeProposerLLM
         from governed_omop_rag.agents.orchestrator import MappingAgent
         from governed_omop_rag.agents.proposer import Proposer
@@ -302,7 +307,12 @@ def map_cmd(
             )
         else:
             proposer_llm = FakeProposerLLM()
-        mapping_agent = MappingAgent(Proposer(proposer_llm), Verifier())  # type: ignore[arg-type]
+        proposer = Proposer(proposer_llm)  # type: ignore[arg-type]
+        verifier = Verifier()
+        if engine == "langgraph":
+            mapping_agent = LangGraphMappingAgent(proposer, verifier)
+        else:
+            mapping_agent = MappingAgent(proposer, verifier)
 
     official_map = OfficialMap.from_csv(map_path or settings.router_map_path)
     router = HybridRouter(

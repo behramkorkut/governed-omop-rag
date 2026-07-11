@@ -19,7 +19,7 @@ sous-agent Vérificateur (Phase 3) viendront décider/justifier sur ces candidat
 
 from __future__ import annotations
 
-from governed_omop_rag.agents.orchestrator import MappingAgent
+from governed_omop_rag.agents.orchestrator import Agent
 from governed_omop_rag.core.models import (
     MappingRequest,
     MappingSource,
@@ -48,7 +48,7 @@ class HybridRouter:
         retriever: Retriever,
         confidence_threshold: float = 0.5,
         top_k: int = 10,
-        agent: MappingAgent | None = None,
+        agent: Agent | None = None,
     ) -> None:
         self._deterministic = DeterministicRouter(official_map)
         self.retriever = retriever

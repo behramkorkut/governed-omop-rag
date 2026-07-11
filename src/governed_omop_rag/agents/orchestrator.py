@@ -15,6 +15,7 @@ Flux :
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Protocol, runtime_checkable
 
 from governed_omop_rag.agents.proposer import ClosedOutputViolation, Proposer
 from governed_omop_rag.agents.verifier import Verifier
@@ -25,6 +26,20 @@ from governed_omop_rag.core.models import (
     MappingSuggestion,
     NoMapReason,
 )
+
+
+@runtime_checkable
+class Agent(Protocol):
+    """Contrat d'un orchestrateur de mapping (implémentation simple ou LangGraph)."""
+
+    def run(
+        self,
+        request: MappingRequest,
+        candidates: Sequence[ConceptCandidate],
+        expected_domain: str | None = None,
+    ) -> MappingSuggestion:
+        """Produit une suggestion validée (ou une sortie non mappée explicite)."""
+        ...
 
 
 class MappingAgent:

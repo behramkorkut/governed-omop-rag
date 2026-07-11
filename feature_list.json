@@ -270,7 +270,7 @@
       "id": "P3-2",
       "phase": 3,
       "title": "Agent Proposer (Claude)",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "choisit un candidat parmi le top-k et justifie",
         "prompt spécialisé raisonnement clinique"
@@ -280,7 +280,7 @@
       "id": "P3-3",
       "phase": 3,
       "title": "Sous-agent Vérificateur (boîte noire)",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "vérifie existence, standard_concept='S', domaine cohérent",
         "retourne PASS/FAIL sans historique d'implémentation"
@@ -290,7 +290,7 @@
       "id": "P3-4",
       "phase": 3,
       "title": "Garde-fou sortie fermée",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "toute proposition hors-vocabulaire est rejetée structurellement",
         "impossible de retourner un concept_id inexistant"
@@ -300,7 +300,7 @@
       "id": "P3-5",
       "phase": 3,
       "title": "Boucle de correction bornée",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "max N essais (ex. 3) Proposer<->Vérificateur",
         "arrêt propre si échec persistant"
@@ -310,7 +310,7 @@
       "id": "P3-6",
       "phase": 3,
       "title": "Gestion non-mappé explicite",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "concept_id=0 + no_map_reason (HORS_VOCABULAIRE/AMBIGU/CONFIDENCE_INSUFFISANTE)",
         "jamais de mapping forcé"
