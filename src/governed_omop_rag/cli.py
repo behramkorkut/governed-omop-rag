@@ -227,9 +227,7 @@ def map_cmd(
         bool,
         typer.Option(help="Décide via l'agent gouverné (Proposer -> Vérificateur)."),
     ] = False,
-    llm: Annotated[
-        str, typer.Option(help="LLM du Proposer : fake (offline) | claude.")
-    ] = "fake",
+    llm: Annotated[str, typer.Option(help="LLM du Proposer : fake (offline) | claude.")] = "fake",
     cache: Annotated[
         bool, typer.Option(help="Active le cache de retrieval (borne coût/latence).")
     ] = False,
