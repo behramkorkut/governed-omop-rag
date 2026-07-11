@@ -238,7 +238,7 @@
       "id": "P2-5",
       "phase": 2,
       "title": "Gold set de régression + recall@k",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "gold set 50-100 mappings CIM-10 FR->SNOMED",
         "test de régression exécuté à chaque commit",
@@ -249,7 +249,7 @@
       "id": "P2-6",
       "phase": 2,
       "title": "Cache local des résultats",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "même libellé/source -> pas de nouvel appel API",
         "cache DuckDB",

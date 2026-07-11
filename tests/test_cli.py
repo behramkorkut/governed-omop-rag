@@ -184,3 +184,30 @@ def test_eval_command(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     assert "Top-1" in result.stdout
     assert "recall@" in result.stdout
+
+
+def test_map_command_cache_hit_on_second_run(tmp_path: Path) -> None:
+    csv = _write_map(tmp_path)
+    cache_db = tmp_path / "cache.duckdb"
+    args = [
+        "map",
+        "--source-label",
+        "diabète de type 2",
+        "--map-path",
+        str(csv),
+        "--bronze-dir",
+        str(FIXTURES),
+        "--embedding-backend",
+        "hashing",
+        "--vector-backend",
+        "memory",
+        "--cache",
+        "--cache-path",
+        str(cache_db),
+    ]
+    r1 = runner.invoke(app, args)
+    assert r1.exit_code == 0, r1.output
+    assert "0 hit / 1 miss" in r1.stdout  # 1er passage : miss
+    r2 = runner.invoke(app, args)
+    assert r2.exit_code == 0, r2.output
+    assert "1 hit / 0 miss" in r2.stdout  # 2e passage : servi par le cache persistant

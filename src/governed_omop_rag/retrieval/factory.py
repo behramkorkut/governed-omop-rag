@@ -6,10 +6,16 @@ vectorstore.py sans couplage au reste).
 from __future__ import annotations
 
 from governed_omop_rag.config import (
+    CacheBackend,
     EmbeddingBackend,
     Settings,
     VectorBackend,
     get_settings,
+)
+from governed_omop_rag.retrieval.cache import (
+    CandidateCache,
+    DuckDBCandidateCache,
+    MemoryCandidateCache,
 )
 from governed_omop_rag.retrieval.embeddings import (
     Embedder,
@@ -38,3 +44,11 @@ def get_vectorstore(settings: Settings | None = None) -> VectorStore:
         return MemoryVectorStore()
     api_key = s.qdrant_api_key.get_secret_value() if s.qdrant_api_key else None
     return QdrantVectorStore(url=s.qdrant_url, collection=s.qdrant_collection, api_key=api_key)
+
+
+def get_cache(settings: Settings | None = None) -> CandidateCache:
+    """Retourne le cache de retrieval configuré (mémoire ou DuckDB persistant)."""
+    s = settings or get_settings()
+    if s.cache_backend is CacheBackend.DUCKDB:
+        return DuckDBCandidateCache(s.cache_path)
+    return MemoryCandidateCache()

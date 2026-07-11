@@ -222,6 +222,12 @@ def map_cmd(
         str | None, typer.Option(help="hashing (offline) ou sentence_transformers.")
     ] = None,
     vector_backend: Annotated[str | None, typer.Option(help="memory (offline) ou qdrant.")] = None,
+    cache: Annotated[
+        bool, typer.Option(help="Active le cache de retrieval (borne coût/latence).")
+    ] = False,
+    cache_path: Annotated[
+        Path | None, typer.Option(help="Fichier DuckDB du cache (défaut: config).")
+    ] = None,
 ) -> None:
     """Mapping hybride : match officiel déterministe, sinon RAG (retrieval) sur le résidu.
 
@@ -231,13 +237,17 @@ def map_cmd(
     from governed_omop_rag.medallion.db import connect
     from governed_omop_rag.medallion.gold import fetch_gold
     from governed_omop_rag.medallion.pipeline import build_corpus
+    from governed_omop_rag.retrieval.cache import (
+        CachedRetriever,
+        DuckDBCandidateCache,
+    )
     from governed_omop_rag.retrieval.embeddings import (
         HashingEmbedder,
         SentenceTransformerEmbedder,
     )
-    from governed_omop_rag.retrieval.factory import get_vectorstore
+    from governed_omop_rag.retrieval.factory import get_cache, get_vectorstore
     from governed_omop_rag.retrieval.index import index_gold
-    from governed_omop_rag.retrieval.retriever import DenseRetriever
+    from governed_omop_rag.retrieval.retriever import DenseRetriever, Retriever
     from governed_omop_rag.retrieval.vectorstore import MemoryVectorStore
     from governed_omop_rag.router.deterministic import OfficialMap
     from governed_omop_rag.router.hybrid import HybridRouter
@@ -264,10 +274,19 @@ def map_cmd(
         con.close()
     index_gold(gold, embedder, store)
 
+    retriever: Retriever = DenseRetriever(embedder, store)
+    cached: CachedRetriever | None = None
+    if cache:
+        cache_obj = (
+            DuckDBCandidateCache(cache_path) if cache_path is not None else get_cache(settings)
+        )
+        cached = CachedRetriever(retriever, cache_obj, namespace=embedder.model_name)
+        retriever = cached
+
     official_map = OfficialMap.from_csv(map_path or settings.router_map_path)
     router = HybridRouter(
         official_map,
-        DenseRetriever(embedder, store),
+        retriever,
         confidence_threshold=settings.confidence_threshold,
         top_k=top_k,
     )
@@ -284,6 +303,8 @@ def map_cmd(
     if suggestion.no_map_reason is not None:
         typer.echo(f"no_map_reason     : {suggestion.no_map_reason.value}")
     typer.echo(f"justification     : {suggestion.justification}")
+    if cached is not None:
+        typer.echo(f"cache             : {cached.hits} hit / {cached.misses} miss")
     if suggestion.candidates:
         typer.echo("candidats :")
         for rank, c in enumerate(suggestion.candidates, start=1):
@@ -291,6 +312,12 @@ def map_cmd(
                 f"  {rank}. [{c.score:.3f}] concept_id={c.concept_id} "
                 f"{c.concept_name} ({c.vocabulary_id}/{c.domain_id})"
             )
+
+    # Ferme proprement une éventuelle connexion de cache persistante (DuckDB).
+    if cached is not None:
+        close = getattr(cached.cache, "close", None)
+        if callable(close):
+            close()
 
 
 @app.command()

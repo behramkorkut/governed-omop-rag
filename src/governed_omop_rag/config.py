@@ -46,6 +46,13 @@ class EmbeddingBackend(StrEnum):
     HASHING = "hashing"
 
 
+class CacheBackend(StrEnum):
+    """Backend du cache de retrieval (borne coût/latence)."""
+
+    MEMORY = "memory"  # non persistant (process unique)
+    DUCKDB = "duckdb"  # persistant (réutilisé entre exécutions)
+
+
 class Settings(BaseSettings):
     """Paramètres applicatifs chargés depuis l'environnement / ``.env``."""
 
@@ -87,6 +94,10 @@ class Settings(BaseSettings):
 
     # --- Évaluation : gold set (vérité terrain reproductible) ---
     gold_set_path: Path = Path("data/eval/gold_set.csv")
+
+    # --- Cache de retrieval (borne coût/latence) ---
+    cache_backend: CacheBackend = CacheBackend.DUCKDB
+    cache_path: Path = Path("data/cache.duckdb")
 
     # --- Garde-fous / gouvernance ---
     confidence_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
