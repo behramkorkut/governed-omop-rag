@@ -57,3 +57,23 @@ jobs:
 
       - name: Pytest (LangGraph orchestrator)
         run: uv run pytest tests/test_graph.py -q
+
+  api:
+    # Job dédié : installe l'extra "api" (FastAPI) et exécute les tests d'API.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.11
+        run: uv python install 3.11
+
+      - name: Sync dependencies (core + dev + extra api)
+        run: uv sync --group dev --extra api
+
+      - name: Pytest (API FastAPI)
+        run: uv run pytest tests/test_api.py -q

@@ -4,6 +4,7 @@ Multi-agent employé uniquement là où Anthropic le justifie :
 spécialisation (Proposer vs Vérificateur) et vérification (garde-fous OMOP).
 """
 
+from governed_omop_rag.agents.factory import build_proposer_llm
 from governed_omop_rag.agents.graph import (
     LangGraphMappingAgent,
     build_mapping_graph,
@@ -32,4 +33,5 @@ __all__ = [
     "VerdictStatus",
     "Verifier",
     "build_mapping_graph",
+    "build_proposer_llm",
 ]

@@ -566,6 +566,7 @@ agents = [
 ]
 api = [
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "python-multipart" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -597,6 +598,7 @@ requires-dist = [
     { name = "anthropic", marker = "extra == 'agents'", specifier = ">=0.34" },
     { name = "duckdb", specifier = ">=1.0" },
     { name = "fastapi", marker = "extra == 'api'", specifier = ">=0.111" },
+    { name = "httpx", marker = "extra == 'api'", specifier = ">=0.27" },
     { name = "langchain-anthropic", marker = "extra == 'agents'", specifier = ">=0.2" },
     { name = "langchain-core", marker = "extra == 'agents'", specifier = ">=0.3" },
     { name = "langgraph", marker = "extra == 'agents'", specifier = ">=0.2" },

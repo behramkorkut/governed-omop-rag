@@ -5,12 +5,15 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import pytest
+from pydantic import SecretStr
 
+from governed_omop_rag.agents.factory import build_proposer_llm
 from governed_omop_rag.agents.llm import FakeProposerLLM
 from governed_omop_rag.agents.orchestrator import MappingAgent
 from governed_omop_rag.agents.proposer import ClosedOutputViolation, Proposer
 from governed_omop_rag.agents.schemas import ProposerOutput, VerdictStatus
 from governed_omop_rag.agents.verifier import Verifier
+from governed_omop_rag.config import Settings
 from governed_omop_rag.core.models import (
     UNMAPPED_CONCEPT_ID,
     ConceptCandidate,
@@ -141,6 +144,23 @@ def test_agent_rejects_hallucinated_output() -> None:
 def test_agent_requires_positive_attempts() -> None:
     with pytest.raises(ValueError):
         MappingAgent(Proposer(FakeProposerLLM()), Verifier(), max_attempts=0)
+
+
+# --------------------------------------------------------------------------- #
+# Fabrique du Proposer LLM (dégradation gracieuse)
+# --------------------------------------------------------------------------- #
+def test_build_proposer_llm_without_key_is_fake() -> None:
+    s = Settings(anthropic_api_key=None)
+    assert isinstance(build_proposer_llm(s), FakeProposerLLM)
+
+
+def test_build_proposer_llm_key_but_no_package_falls_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Clé configurée mais paquet 'anthropic' absent -> fallback Fake (pas de crash).
+    monkeypatch.setattr("importlib.util.find_spec", lambda _name: None)
+    s = Settings(anthropic_api_key=SecretStr("sk-test"))
+    assert isinstance(build_proposer_llm(s), FakeProposerLLM)
 
 
 def test_agent_respects_expected_domain() -> None:

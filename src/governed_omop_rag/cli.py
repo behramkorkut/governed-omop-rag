@@ -295,19 +295,17 @@ def map_cmd(
 
     mapping_agent: Agent | None = None
     if agent:
+        from governed_omop_rag.agents.factory import build_proposer_llm
         from governed_omop_rag.agents.graph import LangGraphMappingAgent
-        from governed_omop_rag.agents.llm import ClaudeProposerLLM, FakeProposerLLM
+        from governed_omop_rag.agents.llm import FakeProposerLLM, ProposerLLM
         from governed_omop_rag.agents.orchestrator import MappingAgent
         from governed_omop_rag.agents.proposer import Proposer
         from governed_omop_rag.agents.verifier import Verifier
 
-        if llm == "claude" and settings.anthropic_api_key is not None:
-            proposer_llm: object = ClaudeProposerLLM(
-                settings.anthropic_api_key.get_secret_value(), settings.llm_model
-            )
-        else:
-            proposer_llm = FakeProposerLLM()
-        proposer = Proposer(proposer_llm)  # type: ignore[arg-type]
+        proposer_llm: ProposerLLM = (
+            build_proposer_llm(settings) if llm == "claude" else FakeProposerLLM()
+        )
+        proposer = Proposer(proposer_llm)
         verifier = Verifier()
         if engine == "langgraph":
             mapping_agent = LangGraphMappingAgent(proposer, verifier)
@@ -401,6 +399,31 @@ def eval(
     report = evaluate(gold, build_retriever(retriever, gold_concepts, embedder, store))
     typer.echo(f"Backend : {emb}/{vec} | retriever : {retriever}")
     typer.echo(report.as_table())
+
+
+@app.command()
+def serve(
+    host: Annotated[str, typer.Option(help="Interface d'écoute.")] = "127.0.0.1",
+    port: Annotated[int, typer.Option(help="Port d'écoute.")] = 8000,
+    bronze_dir: Annotated[
+        Path | None, typer.Option(help="Répertoire OHDSI (sinon config: data/bronze).")
+    ] = None,
+) -> None:
+    """Lance l'API REST (FastAPI/uvicorn). Nécessite l'extra api.
+
+    Le pipeline est construit au démarrage depuis la config (backends, corpus).
+    Démo offline : GOR_EMBEDDING_BACKEND=hashing GOR_VECTOR_BACKEND=memory
+    puis --bronze-dir tests/fixtures.
+    """
+    try:
+        import uvicorn
+    except ImportError as exc:  # pragma: no cover - dépend de l'extra api
+        typer.echo("uvicorn requis : uv sync --extra api", err=True)
+        raise typer.Exit(code=1) from exc
+
+    from governed_omop_rag.api.app import create_app
+
+    uvicorn.run(create_app(bronze_dir=bronze_dir), host=host, port=port)
 
 
 if __name__ == "__main__":
