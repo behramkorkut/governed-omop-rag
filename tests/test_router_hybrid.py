@@ -6,6 +6,10 @@ from pathlib import Path
 
 import pytest
 
+from governed_omop_rag.agents.llm import FakeProposerLLM
+from governed_omop_rag.agents.orchestrator import MappingAgent
+from governed_omop_rag.agents.proposer import Proposer
+from governed_omop_rag.agents.verifier import Verifier
 from governed_omop_rag.core.models import (
     UNMAPPED_CONCEPT_ID,
     ConceptCandidate,
@@ -132,3 +136,42 @@ def test_integration_official_then_dense() -> None:
     assert s2.source is MappingSource.RAG
     assert s2.target_concept_id == 201826
     assert s2.candidates
+
+
+# --------------------------------------------------------------------------- #
+# 4. Router branché sur l'agent gouverné (Proposer -> Vérificateur)
+# --------------------------------------------------------------------------- #
+def _governed_agent() -> MappingAgent:
+    return MappingAgent(Proposer(FakeProposerLLM()), Verifier())
+
+
+def test_router_with_agent_maps_via_governance() -> None:
+    stub = StubRetriever([_cand(201826, 0.9)])
+    router = HybridRouter(OfficialMap({}), stub, agent=_governed_agent())
+    sugg = router.route(MappingRequest(source_label="diabète de type 2"))
+    assert sugg.source is MappingSource.RAG
+    assert sugg.target_concept_id == 201826
+
+
+def test_router_with_agent_official_still_short_circuits() -> None:
+    stub = StubRetriever([_cand(999, 0.9)])
+    router = HybridRouter(OfficialMap({"E11.9": 201826}), stub, agent=_governed_agent())
+    sugg = router.route(MappingRequest(source_code="E11.9"))
+    assert sugg.source is MappingSource.OFFICIAL_MAP
+    assert stub.calls == 0  # ni retriever ni agent sur un match officiel
+
+
+def test_router_with_agent_rejects_non_standard() -> None:
+    # Candidat non-standard -> le Vérificateur FAIL -> sortie non mappée.
+    non_std = ConceptCandidate(
+        concept_id=1,
+        concept_name="x",
+        vocabulary_id="SNOMED",
+        domain_id="Condition",
+        standard_concept=None,
+        score=0.9,
+    )
+    router = HybridRouter(OfficialMap({}), StubRetriever([non_std]), agent=_governed_agent())
+    sugg = router.route(MappingRequest(source_label="x"))
+    assert sugg.source is MappingSource.UNMAPPED
+    assert sugg.no_map_reason is NoMapReason.CONFIDENCE_INSUFFISANTE

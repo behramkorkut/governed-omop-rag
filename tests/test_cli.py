@@ -186,6 +186,59 @@ def test_eval_command(tmp_path: Path) -> None:
     assert "recall@" in result.stdout
 
 
+def test_eval_command_hybrid_retriever(tmp_path: Path) -> None:
+    gold = tmp_path / "gold.csv"
+    gold.write_text(
+        "source_code,source_label,expected_concept_id\n"
+        ",diabète de type 2,201826\n"
+        ",asthme,4048098\n",
+        encoding="utf-8",
+    )
+    result = runner.invoke(
+        app,
+        [
+            "eval",
+            "--gold-path",
+            str(gold),
+            "--bronze-dir",
+            str(FIXTURES),
+            "--embedding-backend",
+            "hashing",
+            "--vector-backend",
+            "memory",
+            "--retriever",
+            "hybrid",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "retriever : hybrid" in result.stdout
+    assert "Top-1" in result.stdout
+
+
+def test_map_command_with_agent(tmp_path: Path) -> None:
+    csv = _write_map(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "map",
+            "--source-label",
+            "diabète de type 2",
+            "--map-path",
+            str(csv),
+            "--bronze-dir",
+            str(FIXTURES),
+            "--embedding-backend",
+            "hashing",
+            "--vector-backend",
+            "memory",
+            "--agent",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "rag" in result.stdout
+    assert "201826" in result.stdout
+
+
 def test_map_command_cache_hit_on_second_run(tmp_path: Path) -> None:
     csv = _write_map(tmp_path)
     cache_db = tmp_path / "cache.duckdb"

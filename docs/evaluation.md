@@ -25,7 +25,20 @@ mappings) pour un benchmark sérieux.
 # baseline hors-ligne (embedding lexical déterministe)
 uv run gor eval --bronze-dir tests/fixtures \
   --embedding-backend hashing --vector-backend memory
+
+# comparer les stratégies de retrieval sur le gold set
+uv run gor eval --bronze-dir tests/fixtures --embedding-backend hashing \
+  --vector-backend memory --retriever dense    # dense seul
+uv run gor eval ... --retriever bm25            # lexical BM25 seul
+uv run gor eval ... --retriever hybrid          # fusion RRF (BM25 + dense)
 ```
+
+Le retrieval hybride (`--retriever hybrid`) fusionne BM25 (lexical) et dense
+(embeddings) par **Reciprocal Rank Fusion**. Sur le corpus de **démonstration**
+(4 concepts, requêtes lexicalement proches), les trois stratégies obtiennent le
+même Top-1 : le corpus est trop petit et trop « lexical » pour les départager.
+L'intérêt de la fusion apparaît sur un **corpus réel** (recouvrement lexical
+partiel, synonymie, fautes) et surtout avec l'embedding **sémantique** BioLORD.
 
 ## Résultats (baseline)
 

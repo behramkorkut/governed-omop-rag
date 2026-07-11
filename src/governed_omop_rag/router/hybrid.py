@@ -19,6 +19,7 @@ sous-agent Vérificateur (Phase 3) viendront décider/justifier sur ces candidat
 
 from __future__ import annotations
 
+from governed_omop_rag.agents.orchestrator import MappingAgent
 from governed_omop_rag.core.models import (
     MappingRequest,
     MappingSource,
@@ -47,11 +48,15 @@ class HybridRouter:
         retriever: Retriever,
         confidence_threshold: float = 0.5,
         top_k: int = 10,
+        agent: MappingAgent | None = None,
     ) -> None:
         self._deterministic = DeterministicRouter(official_map)
         self.retriever = retriever
         self.confidence_threshold = confidence_threshold
         self.top_k = top_k
+        # Si fourni, l'agent (Proposer -> Vérificateur, boucle bornée) décide sur
+        # le résidu à la place du simple seuil de confiance.
+        self.agent = agent
 
     def route(self, request: MappingRequest) -> MappingSuggestion:
         # 1. Déterministe d'abord (uniquement si un code est fourni).
@@ -64,6 +69,11 @@ class HybridRouter:
         query = request.source_label or request.source_code or ""
         candidates = self.retriever.retrieve(query, self.top_k) if query.strip() else []
 
+        # 2a. Si un agent gouverné est branché, il décide (avec garde-fous).
+        if self.agent is not None:
+            return self.agent.run(request, candidates)
+
+        # 2b. Sinon, décision par simple seuil de confiance.
         if not candidates:
             return MappingSuggestion(
                 request=request,

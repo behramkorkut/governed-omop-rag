@@ -9,6 +9,7 @@ sans couplage à la config. ``factory`` (get_embedder/get_vectorstore) et
 module — ils dépendent de config/core.
 """
 
+from governed_omop_rag.retrieval.bm25 import BM25Index, tokenize
 from governed_omop_rag.retrieval.embeddings import (
     Embedder,
     HashingEmbedder,
@@ -24,6 +25,7 @@ from governed_omop_rag.retrieval.vectorstore import (
 )
 
 __all__ = [
+    "BM25Index",
     "Embedder",
     "HashingEmbedder",
     "SentenceTransformerEmbedder",
@@ -33,4 +35,5 @@ __all__ = [
     "VectorItem",
     "VectorStore",
     "cosine_similarity",
+    "tokenize",
 ]

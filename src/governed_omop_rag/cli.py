@@ -222,6 +222,14 @@ def map_cmd(
         str | None, typer.Option(help="hashing (offline) ou sentence_transformers.")
     ] = None,
     vector_backend: Annotated[str | None, typer.Option(help="memory (offline) ou qdrant.")] = None,
+    retriever: Annotated[str, typer.Option(help="dense | bm25 | hybrid (fusion RRF).")] = "dense",
+    agent: Annotated[
+        bool,
+        typer.Option(help="Décide via l'agent gouverné (Proposer -> Vérificateur)."),
+    ] = False,
+    llm: Annotated[
+        str, typer.Option(help="LLM du Proposer : fake (offline) | claude.")
+    ] = "fake",
     cache: Annotated[
         bool, typer.Option(help="Active le cache de retrieval (borne coût/latence).")
     ] = False,
@@ -247,7 +255,7 @@ def map_cmd(
     )
     from governed_omop_rag.retrieval.factory import get_cache, get_vectorstore
     from governed_omop_rag.retrieval.index import index_gold
-    from governed_omop_rag.retrieval.retriever import DenseRetriever, Retriever
+    from governed_omop_rag.retrieval.retriever import Retriever, build_retriever
     from governed_omop_rag.retrieval.vectorstore import MemoryVectorStore
     from governed_omop_rag.router.deterministic import OfficialMap
     from governed_omop_rag.router.hybrid import HybridRouter
@@ -274,21 +282,37 @@ def map_cmd(
         con.close()
     index_gold(gold, embedder, store)
 
-    retriever: Retriever = DenseRetriever(embedder, store)
+    retriever_obj: Retriever = build_retriever(retriever, gold, embedder, store)
     cached: CachedRetriever | None = None
     if cache:
         cache_obj = (
             DuckDBCandidateCache(cache_path) if cache_path is not None else get_cache(settings)
         )
-        cached = CachedRetriever(retriever, cache_obj, namespace=embedder.model_name)
-        retriever = cached
+        cached = CachedRetriever(retriever_obj, cache_obj, namespace=embedder.model_name)
+        retriever_obj = cached
+
+    mapping_agent = None
+    if agent:
+        from governed_omop_rag.agents.llm import ClaudeProposerLLM, FakeProposerLLM
+        from governed_omop_rag.agents.orchestrator import MappingAgent
+        from governed_omop_rag.agents.proposer import Proposer
+        from governed_omop_rag.agents.verifier import Verifier
+
+        if llm == "claude" and settings.anthropic_api_key is not None:
+            proposer_llm: object = ClaudeProposerLLM(
+                settings.anthropic_api_key.get_secret_value(), settings.llm_model
+            )
+        else:
+            proposer_llm = FakeProposerLLM()
+        mapping_agent = MappingAgent(Proposer(proposer_llm), Verifier())  # type: ignore[arg-type]
 
     official_map = OfficialMap.from_csv(map_path or settings.router_map_path)
     router = HybridRouter(
         official_map,
-        retriever,
+        retriever_obj,
         confidence_threshold=settings.confidence_threshold,
         top_k=top_k,
+        agent=mapping_agent,
     )
     request = MappingRequest(
         source_code=source_code,
@@ -330,6 +354,7 @@ def eval(
         str | None, typer.Option(help="hashing (offline) ou sentence_transformers.")
     ] = None,
     vector_backend: Annotated[str | None, typer.Option(help="memory (offline) ou qdrant.")] = None,
+    retriever: Annotated[str, typer.Option(help="dense | bm25 | hybrid (fusion RRF).")] = "dense",
 ) -> None:
     """Évalue le retrieval sur le gold set (Top-1, recall@k, MRR)."""
     from governed_omop_rag.eval.gold_set import load_gold_set
@@ -343,7 +368,7 @@ def eval(
     )
     from governed_omop_rag.retrieval.factory import get_vectorstore
     from governed_omop_rag.retrieval.index import index_gold
-    from governed_omop_rag.retrieval.retriever import DenseRetriever
+    from governed_omop_rag.retrieval.retriever import build_retriever
     from governed_omop_rag.retrieval.vectorstore import MemoryVectorStore
 
     settings = get_settings()
@@ -365,8 +390,8 @@ def eval(
     index_gold(gold_concepts, embedder, store)
 
     gold = load_gold_set(gold_path or settings.gold_set_path)
-    report = evaluate(gold, DenseRetriever(embedder, store))
-    typer.echo(f"Backend : {emb}/{vec}")
+    report = evaluate(gold, build_retriever(retriever, gold_concepts, embedder, store))
+    typer.echo(f"Backend : {emb}/{vec} | retriever : {retriever}")
     typer.echo(report.as_table())
 
 

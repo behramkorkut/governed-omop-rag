@@ -49,9 +49,7 @@ class DenseRetriever:
 class BM25Retriever:
     """Recherche lexicale BM25 sur les documents Gold."""
 
-    def __init__(
-        self, concepts: Sequence[GoldConcept], k1: float = 1.5, b: float = 0.75
-    ) -> None:
+    def __init__(self, concepts: Sequence[GoldConcept], k1: float = 1.5, b: float = 0.75) -> None:
         self._meta: dict[int, GoldConcept] = {c.concept_id: c for c in concepts}
         docs = [(c.concept_id, tokenize(c.doc_text)) for c in concepts]
         self._index = BM25Index(docs, k1=k1, b=b)

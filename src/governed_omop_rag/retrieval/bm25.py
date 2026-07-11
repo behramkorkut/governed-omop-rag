@@ -68,10 +68,7 @@ class BM25Index:
 
     def score(self, query_tokens: Sequence[str]) -> dict[int, float]:
         """Score BM25 de chaque document pour la requête."""
-        return {
-            self.doc_ids[i]: self._score_doc(query_tokens, i)
-            for i in range(self.n_docs)
-        }
+        return {self.doc_ids[i]: self._score_doc(query_tokens, i) for i in range(self.n_docs)}
 
     def top_k(self, query_tokens: Sequence[str], k: int) -> list[tuple[int, float]]:
         """Top-k (doc_id, score) par score décroissant, en excluant les scores nuls."""
