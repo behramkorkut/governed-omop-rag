@@ -100,4 +100,4 @@ jobs:
           uv run pytest
           --cov=governed_omop_rag
           --cov-report=term-missing
-          --cov-fail-under=70
+          --cov-fail-under=85

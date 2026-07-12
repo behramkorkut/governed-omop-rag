@@ -8,7 +8,7 @@
 ![Python](https://img.shields.io/badge/python-3.11-blue)
 ![Types](https://img.shields.io/badge/mypy-strict-blue)
 ![Lint](https://img.shields.io/badge/ruff-clean-black)
-![Coverage](https://img.shields.io/badge/coverage-%E2%89%A570%25-brightgreen)
+![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen)
 ![Docker](https://img.shields.io/badge/docker--compose-api%20%2B%20ui%20%2B%20qdrant-2496ED)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -138,6 +138,7 @@ src/governed_omop_rag/
 - [Guide utilisateur (non-technique, FR)](docs/guide_utilisateur.md) — « essayez en 2 minutes »
 - [Architecture](docs/architecture.md) — schéma mermaid + modules
 - [Évaluation](docs/evaluation.md) — métriques, gold set, benchmark
+- [Réinjection](docs/reinjection.md) — combler les `concept_id = 0` de `synthea-to-omop-fhir` (boucle amont)
 - [Gouvernance](docs/governance.md) · [Souveraineté](docs/souverainete.md) · [Conformité IA Act](docs/ia_act.md)
 
 ## Gouvernance & conformité

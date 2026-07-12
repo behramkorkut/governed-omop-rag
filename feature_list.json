@@ -440,7 +440,7 @@
       "id": "P6-1",
       "phase": 6,
       "title": "Suite pytest complète (unit + intégration + edge)",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "tests unitaires, d'intégration et edge cases",
         "pas de test factice (assert True), pas de mock masquant un bug"
@@ -450,7 +450,7 @@
       "id": "P6-2",
       "phase": 6,
       "title": "CI complète (coverage gate)",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "CI exécute toute la suite",
         "seuil de couverture appliqué"
@@ -490,7 +490,7 @@
       "id": "P6-6",
       "phase": 6,
       "title": "Boucle de réinjection vers synthea-to-omop-fhir",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "export réutilisable pour combler concept_id=0 du projet amont"
       ]
