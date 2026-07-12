@@ -6,6 +6,8 @@ harness : ``gor smoke`` doit sortir en code 0 sur un environnement sain.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated
 
@@ -19,6 +21,16 @@ app = typer.Typer(
     add_completion=False,
     help="governed-omop-rag — mapping CIM-10 FR / libellés -> concepts standard OMOP.",
 )
+
+
+@contextmanager
+def _friendly_extras() -> Iterator[None]:
+    """Transforme une dépendance optionnelle manquante en message clair (pas de stacktrace)."""
+    try:
+        yield
+    except ImportError as exc:  # backend lourd non installé (BioLORD, Qdrant, anthropic…)
+        typer.echo(f"Dépendance manquante : {exc}", err=True)
+        raise typer.Exit(code=1) from exc
 
 
 @app.command()
@@ -186,8 +198,9 @@ def search(
     finally:
         con.close()
 
-    n = index_gold(gold, embedder, store)
-    candidates = search_concepts(query, embedder, store, top_k=top_k)
+    with _friendly_extras():
+        n = index_gold(gold, embedder, store)
+        candidates = search_concepts(query, embedder, store, top_k=top_k)
 
     typer.echo(f"Requête : {query!r}  (indexés: {n}, backend: {emb}/{vec})")
     if not candidates:
@@ -282,7 +295,8 @@ def map_cmd(
         gold = fetch_gold(con)
     finally:
         con.close()
-    index_gold(gold, embedder, store)
+    with _friendly_extras():
+        index_gold(gold, embedder, store)
 
     retriever_obj: Retriever = build_retriever(retriever, gold, embedder, store)
     cached: CachedRetriever | None = None
@@ -393,10 +407,10 @@ def eval(
         gold_concepts = fetch_gold(con)
     finally:
         con.close()
-    index_gold(gold_concepts, embedder, store)
-
     gold = load_gold_set(gold_path or settings.gold_set_path)
-    report = evaluate(gold, build_retriever(retriever, gold_concepts, embedder, store))
+    with _friendly_extras():
+        index_gold(gold_concepts, embedder, store)
+        report = evaluate(gold, build_retriever(retriever, gold_concepts, embedder, store))
     typer.echo(f"Backend : {emb}/{vec} | retriever : {retriever}")
     typer.echo(report.as_table())
 
@@ -429,7 +443,8 @@ def eval_map(
     if overrides:
         settings = settings.model_copy(update=overrides)
 
-    service = MappingService(settings, bronze_dir)
+    with _friendly_extras():
+        service = MappingService(settings, bronze_dir)
     strat = MapStrategy(strategy)
 
     def route(request: MappingRequest) -> MappingSuggestion:
@@ -439,6 +454,9 @@ def eval_map(
     report = evaluate_mapping(gold, route)
     typer.echo(f"stratégie : {strategy} | indexés : {service.concepts_indexed}")
     typer.echo(report.as_table())
+    in_tokens, out_tokens = service.token_usage()
+    if in_tokens or out_tokens:
+        typer.echo(f"tokens LLM         : {in_tokens} in / {out_tokens} out")
 
 
 @app.command()
@@ -463,7 +481,9 @@ def serve(
 
     from governed_omop_rag.api.app import create_app
 
-    uvicorn.run(create_app(bronze_dir=bronze_dir), host=host, port=port)
+    with _friendly_extras():
+        application = create_app(bronze_dir=bronze_dir)
+    uvicorn.run(application, host=host, port=port)
 
 
 @app.command()

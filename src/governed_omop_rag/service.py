@@ -55,7 +55,8 @@ class MappingService:
 
         retriever = build_retriever("hybrid", gold, embedder, store)
         official_map = OfficialMap.from_csv(s.router_map_path)
-        agent = MappingAgent(Proposer(build_proposer_llm(s)), Verifier())
+        self._llm = build_proposer_llm(s)
+        agent = MappingAgent(Proposer(self._llm), Verifier())
 
         self._deterministic = DeterministicRouter(official_map)
         self._auto = HybridRouter(official_map, retriever, s.confidence_threshold, s.top_k, agent)
@@ -81,3 +82,10 @@ class MappingService:
     ) -> list[MappingSuggestion]:
         """Route un lot d'entrées."""
         return [self.route(r, strategy) for r in requests]
+
+    def token_usage(self) -> tuple[int, int]:
+        """Tokens LLM cumulés (input, output) — 0 avec le Proposer hors-ligne."""
+        return (
+            int(getattr(self._llm, "input_tokens", 0)),
+            int(getattr(self._llm, "output_tokens", 0)),
+        )

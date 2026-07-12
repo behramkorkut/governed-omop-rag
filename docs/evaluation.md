@@ -25,6 +25,15 @@ uv run gor eval-map --bronze-dir tests/fixtures \
   --embedding-backend hashing --vector-backend memory --strategy auto
 ```
 
+**3. Coût & latence** (observabilité §7)
+
+`gor eval-map` reporte la **latence moyenne par entrée** (mesurée partout) et,
+lorsque le Proposer est Claude, le **nombre de tokens** cumulés (input/output).
+Hors-ligne (Proposer déterministe), les tokens valent 0 ; c'est avec la clé
+Anthropic (`uv sync --extra agents`) que le coût réel apparaît. La stratégie
+hybride **borne ce coût** : le LLM ne voit que le résidu, pas les cas couverts par
+l'alignement officiel.
+
 ## Gold set
 
 `data/eval/gold_set.csv` — format `source_code,source_label,expected_concept_id`.

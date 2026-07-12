@@ -73,6 +73,7 @@ class MappingReport:
     coverage: float
     unmapped_rate: float
     precision_mapped: float
+    avg_latency_ms: float = 0.0
 
     def as_table(self) -> str:
         return "\n".join(
@@ -82,15 +83,18 @@ class MappingReport:
                 f"couverture         : {self.coverage:.3f}",
                 f"taux non-mappé     : {self.unmapped_rate:.3f}",
                 f"précision (mappés) : {self.precision_mapped:.3f}",
+                f"latence moyenne    : {self.avg_latency_ms:.1f} ms/entrée",
             ]
         )
 
 
-def aggregate_mapping(outcomes: Sequence[tuple[bool, bool]]) -> MappingReport:
+def aggregate_mapping(
+    outcomes: Sequence[tuple[bool, bool]], avg_latency_ms: float = 0.0
+) -> MappingReport:
     """Agrège des (mappé, correct) en MappingReport."""
     n = len(outcomes)
     if n == 0:
-        return MappingReport(0, 0.0, 0.0, 0.0, 0.0)
+        return MappingReport(0, 0.0, 0.0, 0.0, 0.0, avg_latency_ms)
     mapped = sum(1 for m, _ in outcomes if m)
     correct = sum(1 for m, c in outcomes if m and c)
     coverage = mapped / n
@@ -100,6 +104,7 @@ def aggregate_mapping(outcomes: Sequence[tuple[bool, bool]]) -> MappingReport:
         coverage=coverage,
         unmapped_rate=1.0 - coverage,
         precision_mapped=(correct / mapped) if mapped else 0.0,
+        avg_latency_ms=avg_latency_ms,
     )
 
 

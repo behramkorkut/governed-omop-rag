@@ -6,6 +6,7 @@ et pour le benchmark vs Usagi (Phase 5).
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable, Sequence
 
 from governed_omop_rag.core.models import MappingRequest, MappingSuggestion
@@ -44,13 +45,17 @@ def evaluate_mapping(
     partiellement appliqué, ou un routeur). Mesure Top-1, couverture, précision.
     """
     outcomes: list[tuple[bool, bool]] = []
+    total_ms = 0.0
     for item in gold:
         request = MappingRequest(
             source_code=item.source_code,
             source_label=item.source_label,
         )
+        start = time.perf_counter()
         suggestion = route(request)
+        total_ms += (time.perf_counter() - start) * 1000.0
         mapped = suggestion.is_mapped
         correct = mapped and suggestion.target_concept_id == item.expected_concept_id
         outcomes.append((mapped, correct))
-    return aggregate_mapping(outcomes)
+    avg_latency = total_ms / len(gold) if gold else 0.0
+    return aggregate_mapping(outcomes, avg_latency_ms=avg_latency)

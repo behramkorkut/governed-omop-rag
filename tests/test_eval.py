@@ -79,3 +79,4 @@ def test_evaluate_mapping_with_stub_route() -> None:
     assert report.coverage == 0.5
     assert report.top1 == 0.5
     assert report.precision_mapped == 1.0
+    assert report.avg_latency_ms >= 0.0

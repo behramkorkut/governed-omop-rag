@@ -71,6 +71,9 @@ class ClaudeProposerLLM:  # pragma: no cover - nécessite une clé API + réseau
         self.api_key = api_key
         self.model = model
         self._client: Any | None = None
+        # Compteurs de coût (observabilité §7) : tokens cumulés sur la session.
+        self.input_tokens = 0
+        self.output_tokens = 0
 
     def _get_client(self) -> Any:
         if self._client is None:
@@ -103,6 +106,11 @@ class ClaudeProposerLLM:  # pragma: no cover - nécessite une clé API + réseau
             system=_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user}],
         )
+        usage = getattr(message, "usage", None)
+        if usage is not None:
+            self.input_tokens += int(getattr(usage, "input_tokens", 0) or 0)
+            self.output_tokens += int(getattr(usage, "output_tokens", 0) or 0)
+
         text = message.content[0].text
         data = json.loads(text)
         return ProposerOutput(

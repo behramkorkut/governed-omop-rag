@@ -77,6 +77,12 @@ def test_aggregate_mapping() -> None:
     assert report.precision_mapped == pytest.approx(2 / 3)
 
 
+def test_aggregate_mapping_latency() -> None:
+    report = aggregate_mapping([(True, True)], avg_latency_ms=12.5)
+    assert report.avg_latency_ms == pytest.approx(12.5)
+    assert "latence" in report.as_table()
+
+
 def test_aggregate_mapping_empty() -> None:
     report = aggregate_mapping([])
     assert report.n == 0
