@@ -1,6 +1,7 @@
 # ---------------------------------------------------------------------------
-# Image applicative de base (Phase 0). Les services (API/UI) seront ajoutés
-# au docker-compose phase par phase. On installe les deps cœur + retrieval/api.
+# Image applicative (api + ui). On installe les extras api/ui/agents + qdrant-client
+# (recherche vectorielle) SANS torch : l'image reste légère, backend embeddings
+# = hashing (déterministe, hors-ligne) par défaut dans le docker-compose.
 # ---------------------------------------------------------------------------
 FROM python:3.11-slim AS base
 
@@ -18,8 +19,8 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
 
-# Installe le paquet (deps cœur uniquement pour l'image de base).
-RUN uv pip install --system .
+# Installe le paquet + extras exposition/agents + client Qdrant (pas de torch).
+RUN uv pip install --system ".[api,ui,agents]" "qdrant-client>=1.9"
 
 # Le code restant (config, scripts) est monté ou copié selon le service.
 COPY . .

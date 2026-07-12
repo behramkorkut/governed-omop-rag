@@ -5,7 +5,7 @@
     "workflow": "Fable 5 génère le code + tests ; Kimi exécute, teste les edge cases, et flip 'passes' après validation ; l'auteur gère git.",
     "passes": "false = non fait ou non vérifié ; true = implémenté ET vérifié réellement."
   },
-  "current_phase": 5,
+  "current_phase": 6,
   "features": [
     {
       "id": "P0-1",
@@ -470,7 +470,7 @@
       "id": "P6-4",
       "phase": 6,
       "title": "docs (architecture mermaid, governance, souverainete, ia_act)",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "docs/governance.md, docs/souverainete.md, docs/ia_act.md",
         "schéma mermaid d'architecture"

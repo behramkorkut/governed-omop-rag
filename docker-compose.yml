@@ -1,6 +1,13 @@
 # ---------------------------------------------------------------------------
-# Environnement de dev. Phase 0 : uniquement Qdrant (base vectorielle souveraine).
-# Les services api / ui seront ajoutés en Phase 4 (cf. feature_list.json P6-3).
+# Pile multi-services : Qdrant (base vectorielle) + API REST + UI Streamlit.
+# Réseau explicite `gor_net` ; les services se joignent par leur nom de service.
+#
+#   docker compose up --build
+#   -> UI  : http://localhost:8501   ·   API : http://localhost:8000/docs
+#
+# Backends par défaut : embeddings = hashing (hors-ligne, sans torch),
+# VectorStore = Qdrant. Fournir GOR_ANTHROPIC_API_KEY (via .env) pour activer
+# le Proposer Claude ; sinon le Proposer déterministe hors-ligne est utilisé.
 # ---------------------------------------------------------------------------
 services:
   qdrant:
@@ -11,17 +18,54 @@ services:
       - "6334:6334" # gRPC
     volumes:
       - ./qdrant_storage:/qdrant/storage
+    networks:
+      - gor_net
     restart: unless-stopped
 
-  # Service applicatif (optionnel en Phase 0 ; utile pour `gor info` en conteneur).
-  app:
+  api:
     build: .
-    container_name: gor-app
+    container_name: gor-api
     depends_on:
       - qdrant
     environment:
+      - GOR_EMBEDDING_BACKEND=hashing
+      - GOR_VECTOR_BACKEND=qdrant
       - GOR_QDRANT_URL=http://qdrant:6333
-    env_file:
-      - .env
-    profiles: ["app"] # ne démarre pas par défaut : `docker compose --profile app up`
-    command: ["gor", "info"]
+      - GOR_ANTHROPIC_API_KEY=${GOR_ANTHROPIC_API_KEY:-}
+    command:
+      ["gor", "serve", "--host", "0.0.0.0", "--port", "8000", "--bronze-dir", "tests/fixtures"]
+    ports:
+      - "8000:8000"
+    networks:
+      - gor_net
+    restart: unless-stopped
+
+  ui:
+    build: .
+    container_name: gor-ui
+    depends_on:
+      - qdrant
+    environment:
+      - GOR_EMBEDDING_BACKEND=hashing
+      - GOR_VECTOR_BACKEND=qdrant
+      - GOR_QDRANT_URL=http://qdrant:6333
+      - GOR_ANTHROPIC_API_KEY=${GOR_ANTHROPIC_API_KEY:-}
+    command:
+      [
+        "streamlit",
+        "run",
+        "src/governed_omop_rag/ui/app.py",
+        "--server.port",
+        "8501",
+        "--server.address",
+        "0.0.0.0",
+      ]
+    ports:
+      - "8501:8501"
+    networks:
+      - gor_net
+    restart: unless-stopped
+
+networks:
+  gor_net:
+    driver: bridge
