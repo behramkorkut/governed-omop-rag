@@ -320,7 +320,7 @@
       "id": "P4-1",
       "phase": 4,
       "title": "FastAPI /map",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "une entrée -> candidats + suggestion",
         "OpenAPI documentée",
@@ -331,7 +331,7 @@
       "id": "P4-2",
       "phase": 4,
       "title": "FastAPI /map/batch (strategy)",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "un fichier/liste -> suggestions",
         "option strategy: deterministic_only|full_rag|auto"

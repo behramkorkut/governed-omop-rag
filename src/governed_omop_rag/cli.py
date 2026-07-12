@@ -426,5 +426,24 @@ def serve(
     uvicorn.run(create_app(bronze_dir=bronze_dir), host=host, port=port)
 
 
+@app.command()
+def ui(
+    port: Annotated[int, typer.Option(help="Port Streamlit.")] = 8501,
+) -> None:
+    """Lance l'UI de revue steward (Streamlit). Nécessite l'extra ui."""
+    import importlib.util
+    import subprocess
+
+    if importlib.util.find_spec("streamlit") is None:  # pragma: no cover
+        typer.echo("streamlit requis : uv sync --extra ui", err=True)
+        raise typer.Exit(code=1)
+
+    app_path = Path(__file__).parent / "ui" / "app.py"
+    subprocess.run(
+        ["streamlit", "run", str(app_path), "--server.port", str(port)],
+        check=False,
+    )
+
+
 if __name__ == "__main__":
     app()

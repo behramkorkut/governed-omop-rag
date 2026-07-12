@@ -94,6 +94,12 @@ files = ["src", "tests"]
 module = "governed_omop_rag.api.*"
 disallow_untyped_decorators = false
 
+# La vue Streamlit (ui/app.py) est de la glue d'affichage non typée : la logique
+# testée/typée est dans ui/service.py. On n'y applique pas la vérification stricte.
+[[tool.mypy.overrides]]
+module = "governed_omop_rag.ui.app"
+ignore_errors = true
+
 [tool.pytest.ini_options]
 minversion = "8.0"
 addopts = "-ra -q --strict-markers"
