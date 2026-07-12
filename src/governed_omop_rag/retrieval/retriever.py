@@ -14,6 +14,7 @@ from typing import Protocol, runtime_checkable
 
 from governed_omop_rag.core.models import ConceptCandidate
 from governed_omop_rag.medallion.gold import GoldConcept
+from governed_omop_rag.medallion.normalize import normalize_ascii
 from governed_omop_rag.retrieval.bm25 import BM25Index, tokenize
 from governed_omop_rag.retrieval.embeddings import Embedder
 from governed_omop_rag.retrieval.index import search_concepts
@@ -77,6 +78,57 @@ class BM25Retriever:
         )
 
 
+class LexicalBaselineRetriever:
+    """Baseline lexicale par appariement de chaînes — proxy reproductible d'Usagi.
+
+    Usagi (OHDSI) fait du string-matching semi-automatique. On reproduit ici un
+    appariement lexical simple (match exact du libellé, sinon Jaccard sur les
+    tokens du nom + synonymes) pour disposer d'un **point de comparaison honnête**
+    à notre retrieval hybride. Ce n'est PAS Usagi lui-même (outil Java), mais une
+    baseline lexicale du même esprit, exécutable partout.
+    """
+
+    def __init__(self, concepts: Sequence[GoldConcept]) -> None:
+        self._entries: list[tuple[GoldConcept, set[str], set[str]]] = []
+        for c in concepts:
+            tokens = set(tokenize(c.concept_name))
+            for syn in c.synonyms:
+                tokens |= set(tokenize(syn))
+            exacts = {normalize_ascii(c.concept_name)} | {normalize_ascii(s) for s in c.synonyms}
+            self._entries.append((c, tokens, exacts))
+
+    def retrieve(self, query: str, top_k: int = 10) -> list[ConceptCandidate]:
+        q_tokens = set(tokenize(query))
+        q_norm = normalize_ascii(query)
+        if not q_tokens:
+            return []
+        scored: list[tuple[GoldConcept, float]] = []
+        for concept, tokens, exacts in self._entries:
+            if not tokens:
+                continue
+            if q_norm in exacts:
+                score = 1.0
+            else:
+                inter = len(q_tokens & tokens)
+                union = len(q_tokens | tokens)
+                score = inter / union if union else 0.0
+            if score > 0.0:
+                scored.append((concept, score))
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return [
+            ConceptCandidate(
+                concept_id=c.concept_id,
+                concept_name=c.concept_name,
+                vocabulary_id=c.vocabulary_id,
+                domain_id=c.domain_id,
+                standard_concept="S",
+                score=_clamp01(score),
+                synonyms=list(c.synonyms),
+            )
+            for c, score in scored[:top_k]
+        ]
+
+
 class HybridRetriever:
     """Fusionne plusieurs Retriever par Reciprocal Rank Fusion (RRF).
 
@@ -120,7 +172,7 @@ def build_retriever(
     store: VectorStore,
     rrf_k: int = 60,
 ) -> Retriever:
-    """Fabrique un Retriever selon ``kind`` : 'dense', 'bm25' ou 'hybrid'."""
+    """Fabrique un Retriever : 'dense', 'bm25', 'hybrid' ou 'baseline' (lexical)."""
     dense = DenseRetriever(embedder, store)
     if kind == "dense":
         return dense
@@ -128,4 +180,6 @@ def build_retriever(
         return BM25Retriever(concepts)
     if kind == "hybrid":
         return HybridRetriever([BM25Retriever(concepts), dense], rrf_k=rrf_k)
-    raise ValueError(f"retriever inconnu : {kind!r} (dense|bm25|hybrid)")
+    if kind == "baseline":
+        return LexicalBaselineRetriever(concepts)
+    raise ValueError(f"retriever inconnu : {kind!r} (dense|bm25|hybrid|baseline)")

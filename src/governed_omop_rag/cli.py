@@ -401,6 +401,46 @@ def eval(
     typer.echo(report.as_table())
 
 
+@app.command("eval-map")
+def eval_map(
+    gold_path: Annotated[Path | None, typer.Option(help="Gold set CSV (défaut: config).")] = None,
+    bronze_dir: Annotated[
+        Path | None, typer.Option(help="Répertoire OHDSI (défaut: config).")
+    ] = None,
+    strategy: Annotated[str, typer.Option(help="auto | deterministic_only | full_rag.")] = "auto",
+    embedding_backend: Annotated[
+        str | None, typer.Option(help="hashing (offline) ou sentence_transformers.")
+    ] = None,
+    vector_backend: Annotated[str | None, typer.Option(help="memory (offline) ou qdrant.")] = None,
+) -> None:
+    """Évalue le MAPPING final (Top-1, couverture, précision) via le pipeline complet."""
+    from governed_omop_rag.config import EmbeddingBackend, VectorBackend
+    from governed_omop_rag.core.models import MappingRequest, MappingSuggestion
+    from governed_omop_rag.eval.gold_set import load_gold_set
+    from governed_omop_rag.eval.runner import evaluate_mapping
+    from governed_omop_rag.service import MappingService, MapStrategy
+
+    settings = get_settings()
+    overrides: dict[str, object] = {}
+    if embedding_backend:
+        overrides["embedding_backend"] = EmbeddingBackend(embedding_backend)
+    if vector_backend:
+        overrides["vector_backend"] = VectorBackend(vector_backend)
+    if overrides:
+        settings = settings.model_copy(update=overrides)
+
+    service = MappingService(settings, bronze_dir)
+    strat = MapStrategy(strategy)
+
+    def route(request: MappingRequest) -> MappingSuggestion:
+        return service.route(request, strat)
+
+    gold = load_gold_set(gold_path or settings.gold_set_path)
+    report = evaluate_mapping(gold, route)
+    typer.echo(f"stratégie : {strategy} | indexés : {service.concepts_indexed}")
+    typer.echo(report.as_table())
+
+
 @app.command()
 def serve(
     host: Annotated[str, typer.Option(help="Interface d'écoute.")] = "127.0.0.1",

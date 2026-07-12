@@ -64,6 +64,7 @@ def test_requests_from_records_skips_empty_and_nan() -> None:
         {"source_code": "", "source_label": ""},  # ignorée
         {"source_code": "nan", "source_label": "nan"},  # NaN texte -> ignorée
         {"source_code": float("nan"), "source_label": float("nan")},  # vrai NaN pandas
+        {"source_code": float("nan"), "source_label": float("nan")},
     ]
     reqs = requests_from_records(records)
     assert len(reqs) == 2

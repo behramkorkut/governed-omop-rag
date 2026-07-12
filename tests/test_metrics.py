@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from governed_omop_rag.eval.gold_set import GoldItem, load_gold_set
 from governed_omop_rag.eval.metrics import (
     aggregate,
+    aggregate_mapping,
     hit_at_k,
     rank_of,
     reciprocal_rank,
@@ -61,6 +62,26 @@ def test_report_as_table() -> None:
     table = aggregate([(1, [1])], ks=(1,)).as_table()
     assert "Top-1" in table
     assert "recall@1" in table
+
+
+# --------------------------------------------------------------------------- #
+# Métriques niveau-mapping
+# --------------------------------------------------------------------------- #
+def test_aggregate_mapping() -> None:
+    # (mappé, correct) : 3 mappés / 4, 2 corrects / 4.
+    report = aggregate_mapping([(True, True), (True, False), (False, False), (True, True)])
+    assert report.n == 4
+    assert report.coverage == pytest.approx(0.75)
+    assert report.unmapped_rate == pytest.approx(0.25)
+    assert report.top1 == pytest.approx(0.5)
+    assert report.precision_mapped == pytest.approx(2 / 3)
+
+
+def test_aggregate_mapping_empty() -> None:
+    report = aggregate_mapping([])
+    assert report.n == 0
+    assert report.coverage == 0.0
+    assert "couverture" in report.as_table()
 
 
 # --------------------------------------------------------------------------- #

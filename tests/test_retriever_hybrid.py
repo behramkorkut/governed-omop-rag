@@ -16,6 +16,7 @@ from governed_omop_rag.retrieval.retriever import (
     BM25Retriever,
     DenseRetriever,
     HybridRetriever,
+    LexicalBaselineRetriever,
     build_retriever,
 )
 from governed_omop_rag.retrieval.vectorstore import MemoryVectorStore
@@ -92,10 +93,24 @@ def test_build_retriever_kinds() -> None:
     embedder = HashingEmbedder(256)
     store = MemoryVectorStore()
     index_gold(gold, embedder, store)
-    for kind in ("dense", "bm25", "hybrid"):
+    for kind in ("dense", "bm25", "hybrid", "baseline"):
         retriever = build_retriever(kind, gold, embedder, store)
         cands = retriever.retrieve("asthme", top_k=1)
         assert cands and cands[0].concept_id == 4048098
+
+
+# --------------------------------------------------------------------------- #
+# Baseline lexicale (proxy Usagi)
+# --------------------------------------------------------------------------- #
+def test_baseline_exact_match_scores_one() -> None:
+    base = LexicalBaselineRetriever(_gold())
+    cands = base.retrieve("asthme", top_k=3)  # synonyme exact d'Asthma
+    assert cands[0].concept_id == 4048098
+    assert cands[0].score == pytest.approx(1.0)
+
+
+def test_baseline_empty_query() -> None:
+    assert LexicalBaselineRetriever(_gold()).retrieve("   ", top_k=3) == []
 
 
 def test_build_retriever_unknown() -> None:

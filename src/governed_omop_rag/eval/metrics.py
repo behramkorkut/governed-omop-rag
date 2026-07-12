@@ -58,6 +58,51 @@ class EvalReport:
         return "\n".join(lines)
 
 
+@dataclass(frozen=True)
+class MappingReport:
+    """Métriques au niveau du mapping final (au-delà du recall de retrieval).
+
+    - ``top1`` : part des entrées mappées ET correctes (exactitude globale) ;
+    - ``coverage`` : part des entrées effectivement mappées (concept_id != 0) ;
+    - ``unmapped_rate`` : 1 - coverage (l'outil sait dire « je ne sais pas ») ;
+    - ``precision_mapped`` : exactitude parmi les seules entrées mappées.
+    """
+
+    n: int
+    top1: float
+    coverage: float
+    unmapped_rate: float
+    precision_mapped: float
+
+    def as_table(self) -> str:
+        return "\n".join(
+            [
+                f"n entrées          : {self.n}",
+                f"Top-1 (global)     : {self.top1:.3f}",
+                f"couverture         : {self.coverage:.3f}",
+                f"taux non-mappé     : {self.unmapped_rate:.3f}",
+                f"précision (mappés) : {self.precision_mapped:.3f}",
+            ]
+        )
+
+
+def aggregate_mapping(outcomes: Sequence[tuple[bool, bool]]) -> MappingReport:
+    """Agrège des (mappé, correct) en MappingReport."""
+    n = len(outcomes)
+    if n == 0:
+        return MappingReport(0, 0.0, 0.0, 0.0, 0.0)
+    mapped = sum(1 for m, _ in outcomes if m)
+    correct = sum(1 for m, c in outcomes if m and c)
+    coverage = mapped / n
+    return MappingReport(
+        n=n,
+        top1=correct / n,
+        coverage=coverage,
+        unmapped_rate=1.0 - coverage,
+        precision_mapped=(correct / mapped) if mapped else 0.0,
+    )
+
+
 def aggregate(
     per_query: Sequence[tuple[int, Sequence[int]]],
     ks: Sequence[int] = (1, 3, 5),

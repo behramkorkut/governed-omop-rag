@@ -8,7 +8,9 @@ On n'exporte ici que les briques légères (metrics, gold_set). ``runner``
 from governed_omop_rag.eval.gold_set import GoldItem, load_gold_set
 from governed_omop_rag.eval.metrics import (
     EvalReport,
+    MappingReport,
     aggregate,
+    aggregate_mapping,
     hit_at_k,
     rank_of,
     reciprocal_rank,
@@ -17,7 +19,9 @@ from governed_omop_rag.eval.metrics import (
 __all__ = [
     "EvalReport",
     "GoldItem",
+    "MappingReport",
     "aggregate",
+    "aggregate_mapping",
     "hit_at_k",
     "load_gold_set",
     "rank_of",
