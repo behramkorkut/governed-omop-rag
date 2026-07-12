@@ -460,7 +460,7 @@
       "id": "P6-3",
       "phase": 6,
       "title": "docker-compose multi-services",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "api + ui + qdrant orchestrés",
         "docker compose up lance le pipeline en une commande"
@@ -480,7 +480,7 @@
       "id": "P6-5",
       "phase": 6,
       "title": "README badges + GIF démo",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "badges CI/licence",
         "GIF de démo, schéma, chiffres d'éval honnêtes"

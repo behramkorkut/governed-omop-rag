@@ -113,3 +113,15 @@ markers = [
 [tool.coverage.run]
 source = ["src/governed_omop_rag"]
 branch = true
+# Glue d'affichage Streamlit : non testée en unitaire (logique dans ui/service.py).
+omit = ["*/ui/app.py"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "\\.\\.\\.",  # corps des méthodes de Protocol
+    "if __name__ == .__main__.:",
+]

@@ -8,6 +8,7 @@
 ![Python](https://img.shields.io/badge/python-3.11-blue)
 ![Types](https://img.shields.io/badge/mypy-strict-blue)
 ![Lint](https://img.shields.io/badge/ruff-clean-black)
+![Coverage](https://img.shields.io/badge/coverage-%E2%89%A570%25-brightgreen)
 ![Docker](https://img.shields.io/badge/docker--compose-api%20%2B%20ui%20%2B%20qdrant-2496ED)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -51,11 +52,9 @@ fiable), RAG agentique **uniquement sur le résidu** (coût borné). L'agent
 
 ![UI de revue steward](docs/assets/ui.png)
 
-_L'UI Streamlit permet d'importer un fichier CSV/Excel, de visualiser les suggestions justifiées (score, source, candidats), et d'accepter / corriger / rejeter chaque ligne. Voir le [guide utilisateur](docs/guide_utilisateur.md)._
-
-> 📸 _Lancez `gor ui` pour l'écran de revue (import CSV/Excel, suggestions
-> justifiées, accepter/corriger/rejeter, export). Voir le
-> [guide utilisateur](docs/guide_utilisateur.md). Capture : ![UI](docs/assets/ui.png)._
+_L'UI Streamlit permet d'importer un fichier CSV/Excel, de visualiser les
+suggestions justifiées (score, source, candidats), et d'accepter / corriger /
+rejeter chaque ligne. Voir le [guide utilisateur](docs/guide_utilisateur.md)._
 
 ## Ce que ça démontre
 
