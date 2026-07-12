@@ -341,7 +341,7 @@
       "id": "P4-3",
       "phase": 4,
       "title": "UI Streamlit revue steward",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "import CSV/Excel",
         "revue en lot accepter/rejeter/éditer",
@@ -352,7 +352,7 @@
       "id": "P4-4",
       "phase": 4,
       "title": "Export source_to_concept_map + CSV",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "export au format OMOP source_to_concept_map",
         "export CSV"
@@ -362,7 +362,7 @@
       "id": "P4-5",
       "phase": 4,
       "title": "Table steward_feedback",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "stocke entrée/proposition/correction/raison",
         "réutilisable pour amélioration continue"
@@ -372,7 +372,7 @@
       "id": "P4-6",
       "phase": 4,
       "title": "docs/guide_utilisateur.md (FR, non-technique)",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "guide non-technique en français avec captures",
         "parcours 'essayez en 2 minutes'"

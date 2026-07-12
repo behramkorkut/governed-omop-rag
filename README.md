@@ -108,6 +108,11 @@ médaillon + embeddings + Router v1 → **2** retrieval avancé + gold set → *
 multi-agent LangGraph → **4** API + UI steward → **5** évaluation + benchmark
 Usagi → **6** MLOps + démo publique.
 
+## Documentation
+
+- [Guide utilisateur (non-technique, FR)](docs/guide_utilisateur.md) — « essayez en 2 minutes ».
+- [Évaluation](docs/evaluation.md) — métriques, gold set, benchmark.
+
 ## Gouvernance & conformité
 
 Outil d'**aide à la décision** avec validation humaine. Données publiques/
