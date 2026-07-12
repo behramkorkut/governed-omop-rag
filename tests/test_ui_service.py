@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+from collections.abc import Mapping
 from pathlib import Path
 
 from governed_omop_rag.core.models import (
@@ -14,6 +15,7 @@ from governed_omop_rag.core.models import (
 )
 from governed_omop_rag.ui.service import (
     STCM_COLUMNS,
+    collect_validated,
     requests_from_records,
     suggestion_to_row,
     to_source_to_concept_map,
@@ -56,11 +58,12 @@ def _unmapped() -> MappingSuggestion:
 # Parsing des entrées
 # --------------------------------------------------------------------------- #
 def test_requests_from_records_skips_empty_and_nan() -> None:
-    records = [
+    records: list[Mapping[str, object]] = [
         {"source_code": "E11.9", "source_vocabulary": "ICD10FR"},
         {"source_label": "asthme"},
         {"source_code": "", "source_label": ""},  # ignorée
-        {"source_code": "nan", "source_label": "nan"},  # NaN pandas -> ignorée
+        {"source_code": "nan", "source_label": "nan"},  # NaN texte -> ignorée
+        {"source_code": float("nan"), "source_label": float("nan")},  # vrai NaN pandas
     ]
     reqs = requests_from_records(records)
     assert len(reqs) == 2
@@ -109,6 +112,21 @@ def test_to_source_to_concept_map_shape() -> None:
     assert rows[0]["source_concept_id"] == 0
     assert rows[0]["target_concept_id"] == 201826
     assert rows[0]["source_vocabulary_id"] == "ICD10FR"
+
+
+def test_collect_validated_skips_rejects() -> None:
+    mapped = _mapped()
+    decisions = [
+        (mapped, 201826),  # accepté
+        (mapped, None),  # rejeté -> ignoré
+        (mapped, 320128),  # corrigé vers un autre candidat
+    ]
+    validated = collect_validated(decisions)
+    assert [v.target_concept_id for v in validated] == [201826, 320128]
+
+
+def test_collect_validated_all_rejected_is_empty() -> None:
+    assert collect_validated([(_mapped(), None), (_unmapped(), None)]) == []
 
 
 def test_write_source_to_concept_map_csv(tmp_path: Path) -> None:

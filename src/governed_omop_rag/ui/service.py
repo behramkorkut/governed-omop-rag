@@ -103,6 +103,22 @@ def validated_from_suggestion(
     )
 
 
+def collect_validated(
+    decisions: Sequence[tuple[MappingSuggestion, int | None]],
+) -> list[ValidatedMapping]:
+    """Construit les mappings validés à partir des décisions du steward.
+
+    Chaque décision est ``(suggestion, target)`` où ``target`` est le concept_id
+    retenu/corrigé, ou ``None`` pour un **rejet** (aucun mapping produit).
+    """
+    validated: list[ValidatedMapping] = []
+    for suggestion, target in decisions:
+        if target is None:  # rejet du steward
+            continue
+        validated.append(validated_from_suggestion(suggestion, target))
+    return validated
+
+
 def to_source_to_concept_map(
     mappings: Sequence[ValidatedMapping],
     valid_start_date: str = "1970-01-01",

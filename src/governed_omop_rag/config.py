@@ -99,6 +99,9 @@ class Settings(BaseSettings):
     cache_backend: CacheBackend = CacheBackend.DUCKDB
     cache_path: Path = Path("data/cache.duckdb")
 
+    # --- Feedback steward (amélioration continue / traçabilité) ---
+    feedback_path: Path = Path("data/steward_feedback.duckdb")
+
     # --- Garde-fous / gouvernance ---
     confidence_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
     top_k: int = Field(default=10, ge=1, le=100)

@@ -16,12 +16,13 @@ import pandas as pd
 import streamlit as st
 
 from governed_omop_rag.config import get_settings
+from governed_omop_rag.feedback import FeedbackStore, feedback_records_from_decisions
 from governed_omop_rag.service import MappingService, MapStrategy
 from governed_omop_rag.ui.service import (
+    collect_validated,
     requests_from_records,
     suggestion_to_row,
     to_source_to_concept_map,
-    validated_from_suggestion,
 )
 
 
@@ -69,7 +70,7 @@ def main() -> None:
         st.stop()
 
     st.subheader(f"{len(suggestions)} suggestion(s) — validez, corrigez ou rejetez")
-    validated = []
+    decisions: list[tuple[object, int | None]] = []
     for i, suggestion in enumerate(suggestions):
         row = suggestion_to_row(suggestion)
         header = (
@@ -89,21 +90,38 @@ def main() -> None:
                     default_index = j + 1
                     break
             choice = st.selectbox("Décision", labels, index=default_index, key=f"dec_{i}")
-            if choice != "(rejeter)":
-                validated.append(validated_from_suggestion(suggestion, options[choice]))
+            target = None if choice == "(rejeter)" else options[choice]
+            decisions.append((suggestion, target))
 
+    validated = collect_validated(decisions)
     st.divider()
-    if validated:
-        table = pd.DataFrame(to_source_to_concept_map(validated))
-        st.dataframe(table, use_container_width=True)
-        st.download_button(
-            "Exporter source_to_concept_map (CSV)",
-            table.to_csv(index=False).encode("utf-8"),
-            "source_to_concept_map.csv",
-            "text/csv",
+
+    col_export, col_feedback = st.columns(2)
+    with col_export:
+        if validated:
+            table = pd.DataFrame(to_source_to_concept_map(validated))
+            st.dataframe(table, width="stretch")
+            st.download_button(
+                "Exporter source_to_concept_map (CSV)",
+                table.to_csv(index=False).encode("utf-8"),
+                "source_to_concept_map.csv",
+                "text/csv",
+            )
+        else:
+            st.warning("Aucune ligne validée pour l'instant.")
+    with col_feedback:
+        st.caption(
+            "Le feedback (accepté/corrigé/rejeté) alimente l'amélioration continue "
+            "et peut enrichir le gold set d'évaluation."
         )
-    else:
-        st.warning("Aucune ligne validée pour l'instant.")
+        if st.button("Enregistrer le feedback"):
+            store = FeedbackStore(get_settings().feedback_path)
+            try:
+                n = store.record(feedback_records_from_decisions(decisions))
+                total = store.count()
+            finally:
+                store.close()
+            st.success(f"{n} décision(s) enregistrée(s) — {total} au total.")
 
 
 main()
