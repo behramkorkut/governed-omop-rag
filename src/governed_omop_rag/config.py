@@ -88,6 +88,10 @@ class Settings(BaseSettings):
     # --- Corpus médaillon (couche data) ---
     data_dir: Path = Path("data")
     duckdb_path: Path = Path("data/gor.duckdb")
+    # Domaines OMOP retenus en Silver/Gold. None = tous les domaines standard.
+    # Restreindre (ex. ["Condition"]) réduit fortement le corpus indexé -> éval
+    # tractable + candidats cohérents avec le type d'entrée (diagnostic -> conditions).
+    corpus_domains: list[str] | None = None
 
     # --- Router déterministe : alignement officiel CIM-10 <-> SNOMED-CT (ATIH) ---
     router_map_path: Path = Path("data/router/cim10_snomed_official.csv")

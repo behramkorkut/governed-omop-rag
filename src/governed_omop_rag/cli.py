@@ -375,6 +375,10 @@ def eval(
     ] = None,
     vector_backend: Annotated[str | None, typer.Option(help="memory (offline) ou qdrant.")] = None,
     retriever: Annotated[str, typer.Option(help="dense | bm25 | hybrid (fusion RRF).")] = "dense",
+    domain: Annotated[
+        list[str] | None,
+        typer.Option(help="Filtre domain_id (répétable), ex. --domain Condition."),
+    ] = None,
 ) -> None:
     """Évalue le retrieval sur le gold set (Top-1, recall@k, MRR)."""
     from governed_omop_rag.eval.gold_set import load_gold_set
@@ -403,7 +407,7 @@ def eval(
 
     con = connect(":memory:")
     try:
-        build_corpus(con, bronze_dir or settings.bronze_dir)
+        build_corpus(con, bronze_dir or settings.bronze_dir, domain or settings.corpus_domains)
         gold_concepts = fetch_gold(con)
     finally:
         con.close()
@@ -426,6 +430,10 @@ def eval_map(
         str | None, typer.Option(help="hashing (offline) ou sentence_transformers.")
     ] = None,
     vector_backend: Annotated[str | None, typer.Option(help="memory (offline) ou qdrant.")] = None,
+    domain: Annotated[
+        list[str] | None,
+        typer.Option(help="Filtre domain_id (répétable), ex. --domain Condition."),
+    ] = None,
 ) -> None:
     """Évalue le MAPPING final (Top-1, couverture, précision) via le pipeline complet."""
     from governed_omop_rag.config import EmbeddingBackend, VectorBackend
@@ -444,19 +452,16 @@ def eval_map(
         settings = settings.model_copy(update=overrides)
 
     with _friendly_extras():
-        service = MappingService(settings, bronze_dir)
+        service = MappingService(settings, bronze_dir, domain or settings.corpus_domains)
     strat = MapStrategy(strategy)
 
     def route(request: MappingRequest) -> MappingSuggestion:
         return service.route(request, strat)
 
     gold = load_gold_set(gold_path or settings.gold_set_path)
-    report = evaluate_mapping(gold, route)
+    report = evaluate_mapping(gold, route, token_usage=service.token_usage)
     typer.echo(f"stratégie : {strategy} | indexés : {service.concepts_indexed}")
     typer.echo(report.as_table())
-    in_tokens, out_tokens = service.token_usage()
-    if in_tokens or out_tokens:
-        typer.echo(f"tokens LLM         : {in_tokens} in / {out_tokens} out")
 
 
 @app.command()

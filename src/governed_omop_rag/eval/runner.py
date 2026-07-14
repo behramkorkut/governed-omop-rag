@@ -38,11 +38,14 @@ def evaluate(
 def evaluate_mapping(
     gold: Sequence[GoldItem],
     route: Callable[[MappingRequest], MappingSuggestion],
+    token_usage: Callable[[], tuple[int, int]] | None = None,
 ) -> MappingReport:
     """Évalue le mapping FINAL (pas seulement le retrieval).
 
     ``route`` prend une requête et renvoie la suggestion (ex. MappingService.route
     partiellement appliqué, ou un routeur). Mesure Top-1, couverture, précision.
+    ``token_usage`` : rappel optionnel renvoyant le cumul LLM (in, out) après le
+    lot, pour reporter le coût par entrée (P5-5).
     """
     outcomes: list[tuple[bool, bool]] = []
     total_ms = 0.0
@@ -58,4 +61,10 @@ def evaluate_mapping(
         correct = mapped and suggestion.target_concept_id == item.expected_concept_id
         outcomes.append((mapped, correct))
     avg_latency = total_ms / len(gold) if gold else 0.0
-    return aggregate_mapping(outcomes, avg_latency_ms=avg_latency)
+    in_tokens, out_tokens = token_usage() if token_usage is not None else (0, 0)
+    return aggregate_mapping(
+        outcomes,
+        avg_latency_ms=avg_latency,
+        total_input_tokens=in_tokens,
+        total_output_tokens=out_tokens,
+    )

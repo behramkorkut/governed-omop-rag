@@ -139,16 +139,24 @@ class QdrantVectorStore(VectorStore):
                 vectors_config=VectorParams(size=dimension, distance=Distance.COSINE),
             )
 
+    # Qdrant borne le payload JSON d'une requête (~32 Mo). On upsert par lots
+    # pour supporter un corpus réel (~10^5 concepts) sans dépasser la limite.
+    _UPSERT_BATCH = 1000
+
     def upsert(self, items: Sequence[VectorItem]) -> int:  # pragma: no cover - I/O réseau
         from qdrant_client.models import PointStruct
 
         client = self._get_client()
-        points = [
-            PointStruct(id=item.concept_id, vector=item.vector, payload=item.payload)
-            for item in items
-        ]
-        client.upsert(collection_name=self.collection, points=points)
-        return len(points)
+        total = 0
+        for start in range(0, len(items), self._UPSERT_BATCH):
+            batch = items[start : start + self._UPSERT_BATCH]
+            points = [
+                PointStruct(id=item.concept_id, vector=item.vector, payload=item.payload)
+                for item in batch
+            ]
+            client.upsert(collection_name=self.collection, points=points)
+            total += len(points)
+        return total
 
     def search(
         self, vector: Sequence[float], top_k: int = 10

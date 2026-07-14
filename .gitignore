@@ -41,3 +41,7 @@ CONTEXT.md
 # DuckDB générées
 *.duckdb
 *.duckdb.wal
+
+#bundle athena 
+bundle/
+bundle/*

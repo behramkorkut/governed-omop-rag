@@ -74,24 +74,37 @@ class MappingReport:
     unmapped_rate: float
     precision_mapped: float
     avg_latency_ms: float = 0.0
+    # Coût LLM par entrée (P5-5) : 0 avec le Proposer hors-ligne / le déterministe.
+    avg_input_tokens: float = 0.0
+    avg_output_tokens: float = 0.0
 
     def as_table(self) -> str:
-        return "\n".join(
-            [
-                f"n entrées          : {self.n}",
-                f"Top-1 (global)     : {self.top1:.3f}",
-                f"couverture         : {self.coverage:.3f}",
-                f"taux non-mappé     : {self.unmapped_rate:.3f}",
-                f"précision (mappés) : {self.precision_mapped:.3f}",
-                f"latence moyenne    : {self.avg_latency_ms:.1f} ms/entrée",
-            ]
-        )
+        lines = [
+            f"n entrées          : {self.n}",
+            f"Top-1 (global)     : {self.top1:.3f}",
+            f"couverture         : {self.coverage:.3f}",
+            f"taux non-mappé     : {self.unmapped_rate:.3f}",
+            f"précision (mappés) : {self.precision_mapped:.3f}",
+            f"latence moyenne    : {self.avg_latency_ms:.1f} ms/entrée",
+        ]
+        if self.avg_input_tokens or self.avg_output_tokens:
+            lines.append(
+                f"tokens/entrée      : {self.avg_input_tokens:.1f} in / "
+                f"{self.avg_output_tokens:.1f} out"
+            )
+        return "\n".join(lines)
 
 
 def aggregate_mapping(
-    outcomes: Sequence[tuple[bool, bool]], avg_latency_ms: float = 0.0
+    outcomes: Sequence[tuple[bool, bool]],
+    avg_latency_ms: float = 0.0,
+    total_input_tokens: int = 0,
+    total_output_tokens: int = 0,
 ) -> MappingReport:
-    """Agrège des (mappé, correct) en MappingReport."""
+    """Agrège des (mappé, correct) en MappingReport.
+
+    ``total_*_tokens`` : cumul LLM sur tout le lot, réparti par entrée (P5-5).
+    """
     n = len(outcomes)
     if n == 0:
         return MappingReport(0, 0.0, 0.0, 0.0, 0.0, avg_latency_ms)
@@ -105,6 +118,8 @@ def aggregate_mapping(
         unmapped_rate=1.0 - coverage,
         precision_mapped=(correct / mapped) if mapped else 0.0,
         avg_latency_ms=avg_latency_ms,
+        avg_input_tokens=total_input_tokens / n,
+        avg_output_tokens=total_output_tokens / n,
     )
 
 

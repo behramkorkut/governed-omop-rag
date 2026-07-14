@@ -41,13 +41,18 @@ class MapStrategy(StrEnum):
 class MappingService:
     """Pipeline de mapping gouverné, construit une fois puis réutilisé."""
 
-    def __init__(self, settings: Settings | None = None, bronze_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        bronze_dir: Path | None = None,
+        domains: Sequence[str] | None = None,
+    ) -> None:
         s = settings or get_settings()
         embedder = get_embedder(s)
         store = get_vectorstore(s)
         con = connect(":memory:")
         try:
-            build_corpus(con, bronze_dir or s.bronze_dir)
+            build_corpus(con, bronze_dir or s.bronze_dir, domains or s.corpus_domains)
             gold = fetch_gold(con)
         finally:
             con.close()
