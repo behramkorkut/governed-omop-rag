@@ -27,34 +27,50 @@ uv run gor eval-map --bronze-dir tests/fixtures \
 
 **3. Coût & latence** (observabilité §7)
 
-`gor eval-map` reporte la **latence moyenne par entrée** (mesurée partout) et,
-lorsque le Proposer est Claude, le **nombre de tokens** cumulés (input/output).
-Hors-ligne (Proposer déterministe), les tokens valent 0 ; c'est avec la clé
-Anthropic (`uv sync --extra agents`) que le coût réel apparaît. La stratégie
-hybride **borne ce coût** : le LLM ne voit que le résidu, pas les cas couverts par
-l'alignement officiel.
+`gor eval-map` reporte la **latence moyenne par entrée** (mesurée partout) et les
+**tokens moyens par entrée** (input/output) quand le Proposer est Claude — ligne
+`tokens/entrée` du rapport. Hors-ligne (Proposer déterministe), les tokens valent 0
+et la ligne est masquée ; c'est avec la clé Anthropic (`uv sync --extra agents`) que
+le coût réel apparaît. La stratégie hybride **borne ce coût** : le LLM ne voit que le
+résidu, pas les cas couverts par l'alignement officiel.
 
-## Gold set
+## Gold set réel (ATIH)
 
-`data/eval/gold_set.csv` — format `source_code,source_label,expected_concept_id`.
-Vérité terrain à dériver de l'alignement officiel CIM-10 ↔ SNOMED-CT (ATIH) et/ou
-d'annotations manuelles. Le jeu livré est un **échantillon** aligné sur le corpus
-de démonstration (`tests/fixtures`) ; le remplacer par un gold set réel (50–100
-mappings) pour un benchmark sérieux.
+`data/eval/gold_set_atih.csv` — **80 mappings CIM-10 FR → SNOMED**, format
+`source_code,source_label,expected_concept_id`. Construit automatiquement
+(`scripts/build_gold_set.py`) à partir des vocabulaires OHDSI (Athena) :
+
+- **source** = vocabulaire **CIM10** (édition française réelle de l'ATIH, `vocabulary_id='CIM10'`) ;
+- **cible** = concept **SNOMED standard** (`standard_concept='S'`, valide) ;
+- via la relation officielle **« Maps to »** (19 191 paires CIM10→SNOMED dans le bundle) ;
+- **uniquement les mappings 1-à-1** : un code source qui mappe vers exactement un
+  concept standard (les ambiguïtés 1-à-N sont exclues = vérité terrain nette).
+
+Un gold set de démonstration minimal (`data/eval/gold_set.csv`, 5 entrées) reste
+utilisé par le test de régression `tests/test_eval.py`.
+
+> **Deux limites assumées.** (1) Les `concept_name` de la CIM10 dans OHDSI sont en
+> **anglais** ; le test réel porte sur le **code** CIM-10 FR (ex. `J44.1`), pas sur
+> le libellé. (2) On **restreint le corpus au domaine `Condition`** (~105 k concepts
+> SNOMED standard sur 831 k) : c'est cohérent avec le gold set (mapper un diagnostic
+> → candidats conditions) et rend l'évaluation tractable.
 
 ## Reproduire
 
 ```bash
-# baseline hors-ligne (embedding lexical déterministe)
-uv run gor eval --bronze-dir tests/fixtures \
-  --embedding-backend hashing --vector-backend memory
+docker compose up -d qdrant   # base vectorielle (pour les backends dense/qdrant)
 
-# comparer les stratégies de retrieval sur le gold set
-uv run gor eval --bronze-dir tests/fixtures --embedding-backend hashing \
-  --vector-backend memory --retriever dense    # dense seul
-uv run gor eval ... --retriever bm25            # lexical BM25 seul
-uv run gor eval ... --retriever hybrid          # fusion RRF (BM25 + dense)
-uv run gor eval ... --retriever baseline        # baseline lexicale (proxy Usagi)
+# Baselines lexicales (rapides, sans embedding réel) :
+uv run gor eval --gold-path data/eval/gold_set_atih.csv --bronze-dir bundle/athena_bundle \
+  --domain Condition --embedding-backend hashing --vector-backend memory --retriever baseline
+uv run gor eval ... --retriever bm25            # BM25 lexical seul
+
+# Retrieval sémantique (BioLORD) — LOURD (~10^5 concepts embarqués une fois) :
+GOR_QDRANT_COLLECTION=ohdsi_biolord uv run gor eval \
+  --gold-path data/eval/gold_set_atih.csv --bronze-dir bundle/athena_bundle --domain Condition \
+  --embedding-backend sentence_transformers --vector-backend qdrant --retriever dense
+# puis, sans ré-embarquer le corpus :
+GOR_QDRANT_COLLECTION=ohdsi_biolord uv run gor eval ... --retriever hybrid --reuse-index
 ```
 
 ## Benchmark vs Usagi (proxy honnête)
@@ -63,54 +79,64 @@ Usagi (OHDSI) fait du **string-matching semi-automatique** (précision indicativ
 ~44 % sur du mapping de médicaments informels, cf. CONTEXT.md §2). Comme Usagi est
 un outil Java difficile à scripter en CI, on fournit une **baseline lexicale
 reproductible du même esprit** (`--retriever baseline` : match exact + Jaccard sur
-nom/synonymes) pour comparer, à armes égales et partout, notre retrieval hybride.
+nom/synonymes) pour comparer, à armes égales et partout, notre retrieval.
 
-| Stratégie | n | Top-1 |
-|---|---|---|
-| baseline lexicale (proxy Usagi) | 5 | 1.000 |
-| dense (embeddings) | 5 | 1.000 |
-| BM25 | 5 | 1.000 |
-| hybride (RRF) | 5 | 1.000 |
+**Gold set ATIH (80 conditions CIM-10 FR → SNOMED), corpus Condition (~105 k) :**
 
-> Sur le corpus de démonstration (4 concepts), toutes les stratégies obtiennent
-> le même Top-1 : le corpus est trop petit/lexical pour les départager. L'écart
-> attendu (fusion hybride + embedding **sémantique** BioLORD > baseline lexicale)
-> se mesurera sur un **corpus réel** et un **gold set** conséquent.
-
-Le retrieval hybride (`--retriever hybrid`) fusionne BM25 (lexical) et dense
-(embeddings) par **Reciprocal Rank Fusion**. Sur le corpus de **démonstration**
-(4 concepts, requêtes lexicalement proches), les trois stratégies obtiennent le
-même Top-1 : le corpus est trop petit et trop « lexical » pour les départager.
-L'intérêt de la fusion apparaît sur un **corpus réel** (recouvrement lexical
-partiel, synonymie, fautes) et surtout avec l'embedding **sémantique** BioLORD.
-
-## Résultats (baseline)
-
-Backend `hashing` (lexical, hors-ligne) sur le gold set de démonstration
-(5 requêtes, corpus de 4 concepts) :
-
-| Backend | n | Top-1 | recall@3 | recall@5 | MRR |
+| Stratégie | n | Top-1 | recall@3 | recall@5 | MRR |
 |---|---|---|---|---|---|
-| hashing (lexical) | 5 | 1.000 | 1.000 | 1.000 | 1.000 |
+| baseline lexicale (proxy Usagi) | 80 | 0.325 | 0.438 | 0.487 | 0.380 |
+| BM25 (lexical) | 80 | 0.300 | 0.562 | 0.613 | 0.433 |
+| dense — `hashing` (plancher non-sémantique) | 80 | 0.113 | 0.212 | 0.237 | 0.160 |
+| dense — **BioLORD** (sémantique) | 80 | _à compléter_ | _—_ | _—_ | _—_ |
+| hybride RRF — **BioLORD** | 80 | _à compléter_ | _—_ | _—_ | _—_ |
 
-> ⚠️ Corpus de démonstration minuscule : ces chiffres valident la **tuyauterie**
-> d'évaluation, pas la performance réelle. Le backend `hashing` est purement
-> **lexical** ; le backend `sentence_transformers` (BioLORD) capturera la
-> **sémantique** (ex. « glycémie élevée » ↔ diabète) et sera évalué sur un gold
-> set réel. Un **benchmark comparatif vs Usagi** est prévu en Phase 5.
+**Lecture.** Sur un vrai corpus, les stratégies se départagent enfin. Le **BM25**
+dépasse déjà la baseline proxy-Usagi au rappel (recall@5 : **0.613 vs 0.487**) : un
+lexical bien pondéré (TF-IDF/BM25) bat le simple match+Jaccard. La ligne `hashing`
+est un **plancher** : embedding purement lexical par hachage, non sémantique — il
+n'est là que pour valider la chaîne. Les lignes **BioLORD** (embedding biomédical)
+et **hybride** (fusion BM25 + dense par Reciprocal Rank Fusion) sont laissées à
+compléter : leur intérêt — synonymie, reformulations, « glycémie élevée » ↔ diabète
+— ne se mesure qu'avec l'embedding sémantique, dont le calcul sur ~105 k concepts
+est coûteux (une passe de plusieurs dizaines de minutes sur CPU).
 
-## Obtenir des chiffres réels (à faire)
+> Honnêteté méthodologique : on **ne prétend pas** battre l'état de l'art. On publie
+> un protocole reproductible, un gold set réel et des chiffres bruts — y compris le
+> plancher. « On ne dit pas que c'est mieux, on le mesure. »
 
-Pour un benchmark sérieux et citable :
+## Fidélité & hallucination (garde-fous mesurés)
 
-1. **Corpus réel** : déposer les exports Athena (`CONCEPT.csv`,
-   `CONCEPT_SYNONYM.csv`) dans `data/bronze/`, puis `gor build-corpus`.
-2. **Alignement officiel** : remplacer `data/router/cim10_snomed_official.csv` par
-   le vrai alignement CIM-10 FR ↔ SNOMED-CT (ATIH, publié 2×/an).
-3. **Gold set étendu** (50–100) : dérivé de l'alignement officiel et **enrichi par
-   les corrections réelles du steward** — `FeedbackStore.to_gold_records()`
-   produit directement des entrées au format `gold_set.csv`.
-4. **Embedding sémantique** : `--embedding-backend sentence_transformers` (BioLORD).
+Au-delà de « le bon concept est-il trouvé ? », on mesure **la gouvernance elle-même**
+(`governed_omop_rag.eval.quality`, fonctions pures, testées dans `tests/test_quality.py`).
+
+**Faithfulness** (P5-3, style RAGAS léger) — `faithfulness_score(justification, candidats)` :
+part des mots de contenu de la justification du Proposer qui apparaissent
+effectivement dans les **candidats fournis**. Un score < 1 signale une justification
+qui s'appuie sur du contexte **externe** (risque d'hallucination de raisonnement).
+Mesure déterministe, sans appel LLM supplémentaire.
+
+**Taux d'hallucination** (P5-4) — `hallucination_rate(concepts_proposés, vocabulaire_valide)` :
+part des `target_concept_id` proposés qui sont **hors-vocabulaire ou non-standard**.
+Le point clé : `concept_id = 0` (abstention, « je ne sais pas ») **n'est pas** une
+hallucination. Grâce au **garde-fou de sortie fermée** (`ClosedOutputViolation` : le
+Proposer ne peut choisir qu'un `concept_id` réellement présent dans les candidats),
+ce taux est **structurellement ≈ 0**. La métrique le **vérifie**, elle ne le suppose
+pas — c'est la différence entre « on a mis un garde-fou » et « on prouve qu'il tient ».
+
+## Obtenir des chiffres réels — statut
+
+| # | Étape | Statut |
+|---|---|---|
+| 1 | **Corpus réel** — bundle Athena → `gor build-corpus` (831 k concepts, ~105 k Condition) | ✅ fait |
+| 2 | **Gold set réel** — 80 mappings CIM-10 FR → SNOMED (1-à-1, `scripts/build_gold_set.py`) | ✅ fait |
+| 3 | **Baselines chiffrées** — proxy Usagi + BM25 sur le gold set réel | ✅ fait |
+| 4 | **Embedding sémantique BioLORD** — `--embedding-backend sentence_transformers` | ⏳ à lancer (coûteux) |
+| 5 | **Alignement officiel enrichi** — remplacer `cim10_snomed_official.csv` par l'alignement ATIH complet | ⏳ |
+| 6 | **Gold set enrichi steward** — `FeedbackStore.to_gold_records()` produit des entrées `gold_set.csv` | ⏳ (boucle continue) |
+
+Il ne reste, pour un benchmark pleinement citable, qu'à lancer la passe **BioLORD**
+(étape 4) et à reporter ses deux lignes dans le tableau ci-dessus.
 
 ## Régression
 

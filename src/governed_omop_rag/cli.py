@@ -379,6 +379,14 @@ def eval(
         list[str] | None,
         typer.Option(help="Filtre domain_id (répétable), ex. --domain Condition."),
     ] = None,
+    reuse_index: Annotated[
+        bool,
+        typer.Option(
+            "--reuse-index",
+            help="Ne pas ré-indexer : réutilise la collection vectorielle déjà remplie "
+            "(évite de ré-embarquer le corpus entre deux retrievers).",
+        ),
+    ] = False,
 ) -> None:
     """Évalue le retrieval sur le gold set (Top-1, recall@k, MRR)."""
     from governed_omop_rag.eval.gold_set import load_gold_set
@@ -413,9 +421,11 @@ def eval(
         con.close()
     gold = load_gold_set(gold_path or settings.gold_set_path)
     with _friendly_extras():
-        index_gold(gold_concepts, embedder, store)
+        if not reuse_index:
+            index_gold(gold_concepts, embedder, store)
         report = evaluate(gold, build_retriever(retriever, gold_concepts, embedder, store))
-    typer.echo(f"Backend : {emb}/{vec} | retriever : {retriever}")
+    reused = " (index réutilisé)" if reuse_index else ""
+    typer.echo(f"Backend : {emb}/{vec} | retriever : {retriever}{reused}")
     typer.echo(report.as_table())
 
 

@@ -382,7 +382,7 @@
       "id": "P5-1",
       "phase": 5,
       "title": "Gold set CIM-10 FR -> SNOMED",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "50-100 mappings annotés/officiels comme vérité terrain"
       ]
@@ -401,7 +401,7 @@
       "id": "P5-3",
       "phase": 5,
       "title": "Faithfulness (style RAGAS)",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "la justification s'appuie sur les candidats fournis, pas hors-contexte"
       ]
@@ -410,7 +410,7 @@
       "id": "P5-4",
       "phase": 5,
       "title": "Taux d'hallucination",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "mesure des propositions hors-vocabulaire/non-standard",
         "tend vers 0 grâce au garde-fou"
@@ -420,7 +420,7 @@
       "id": "P5-5",
       "phase": 5,
       "title": "Coût & latence par mapping",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "tokens et $ par mapping",
         "temps par concept comparable à Llettuce (~8,7 s)"
