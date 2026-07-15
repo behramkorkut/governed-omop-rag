@@ -1,7 +1,7 @@
 # Évaluation
 
 Le projet mesure honnêtement la qualité du retrieval sur un **gold set**
-reproductible plutôt que de prétendre battre l'état de l'art (cf. CONTEXT.md §7).
+réproductible plutôt que de prétendre battre l'état de l'art (cf. CONTEXT.md §7).
 
 ## Deux niveaux de mesure
 
@@ -151,23 +151,68 @@ non.
 ### Mapping de bout en bout (pipeline complet, résidu held-out)
 
 `gor eval-map --strategy auto` sur les 80 codes du gold set (tous **held-out** de
-l'alignement officiel → routés vers le RAG gouverné, retrieval **hybride**,
-Proposer hors-ligne) :
+l'alignement officiel → routés vers le RAG gouverné, retrieval **hybride BioLORD**),
+selon le Proposer :
 
-| n | Top-1 (global) | couverture | précision (mappés) | latence |
-|---|---|---|---|---|
-| 80 | **0.412** | 1.000 | **0.412** | **198 ms/entrée** |
+| Proposer | Top-1 (global) | couverture | précision (mappés) | latence | tokens/entrée |
+|---|---|---|---|---|---|
+| hors-ligne (`FakeProposerLLM`) | 0.412 | 1.000 | 0.412 | 198 ms | — |
+| **Claude Sonnet 5** | **0.650** | 1.000 | **0.650** | 2718 ms | 1507 in / 65 out |
 
-Deux lectures utiles. (1) La **précision de bout en bout** (0.412) reflète le
-retrieval **hybride** (0.412 Top-1, meilleur que BM25 seul 0.300) suivi du choix du
-Proposer — cohérent : le Proposer hors-ligne (`FakeProposerLLM`) retourne le 1er
-candidat du retriever, donc le Top-1 mapping = Top-1 retrieval. (2) La **couverture
-= 1.000** vient du Proposer **hors-ligne** (`FakeProposerLLM`), qui choisit
-toujours un candidat et ne s'abstient jamais. Avec le **vrai** Proposer (Claude) +
-le Vérificateur + le seuil de confiance, les cas douteux **s'abstiennent**
-(`concept_id = 0`) : la couverture baisse et la précision-sur-mappés monte —
-l'outil « sait dire je ne sais pas ». La décision finale reste **toujours** au
-steward.
+**C'est le résultat central du projet.** Le Proposer LLM ne se contente pas de
+prendre le 1er candidat : il **choisit dans le top-k** le bon concept. Résultat, le
+mapping passe de **0.412 → 0.650 Top-1** (+23.8 points) sur le résidu le plus
+difficile — la valeur ajoutée du « l'IA propose » est **mesurée**, pas supposée. Le
+retrieval hybride met le bon concept dans le top-5 (recall@5 0.700) ; le jugement de
+Claude le remonte souvent en tête.
+
+Lectures complémentaires. (1) **C'est du RAG authentique** : le prompt envoyé à
+Claude ne contient que le **libellé source** (description anglaise CIM-10, ex.
+« Chronic obstructive pulmonary disease with acute exacerbation »), **pas le code**
+(`J44.1`). La sortie fermée (`ClosedOutputViolation`) l'empêche de choisir hors de la
+liste des candidats retrouvés. Le 65 % n'est pas de la mémorisation — c'est Claude qui
+juge lequel des 5 candidats est le plus pertinent. (2) **Coût borné** : ~1507 tokens
+in / 65 out par entrée, soit **≈ 0,005 $/entrée** aux tarifs Sonnet publics (à vérifier
+sur la facturation) — et le LLM ne voit **que le résidu**, jamais les 31.8 % couverts
+par l'alignement officiel. (3) **Latence** : 198 → 2718 ms/entrée (l'appel réseau au
+LLM domine) — un coût assumé pour du mapping par lots supervisé, pas du temps réel.
+(4) **Couverture = 1.000** : sur ces 80 conditions, chaque candidat du retriever est
+un concept SNOMED standard valide, donc le Vérificateur les accepte et l'agent ne
+s'abstient jamais. L'abstention (`concept_id = 0`) reste possible par construction
+(aucun candidat, ou violation de sortie fermée) ; un **seuil de confiance sur la voie
+agent** pour provoquer l'abstention sur cas douteux est une amélioration identifiée.
+La décision finale reste **toujours** au steward.
+
+### ⚠️ Bug identifié : couverture artificiellement à 100 % (voie agent)
+
+**Constat.** Quand l'agent Proposer est branché (`--agent`), le `HybridRouter`
+court-circuite le seuil de confiance (`hybrid.py:73-74`) : l'agent décide sur tous
+les résidus, même les plus douteux. Le Vérificateur ne vérifie que les règles OMOP
+(standard='S', domaine) — tous les candidats du retriever étant des SNOMED standard,
+il passe toujours → **aucune abstention**.
+
+**Impact.** La couverture = 1.000 est artificielle. En production, on veut que
+l'outil dise « je ne sais pas » quand le match est ambigu — sinon le steward valide
+mécaniquement et la précision apparente cache du bruit.
+
+**Piste de correction.** Un signal d'abstention adapté à la voie agent :
+
+| Signal | Description | Seuil |
+|---|---|---|
+| **Marge top-1 / top-2** | Si le score RRF du 1er est très proche du 2ème → ambigu | marge < 0.01 |
+| **Rang du candidat choisi** | Si Claude choisit le 4ème ou 5ème → peu confiant | rang ≥ 3 |
+| **Score cosinus dense** | Score BioLORD du candidat choisi (indépendant du RRF) | < 0.3 |
+
+Implémentation : dans `MappingAgent.run()`, après le choix de Claude, évaluer le
+signal. Si le signal est sous le seuil → retourner `concept_id=0` + `NoMapReason.AMBIGU`,
+les candidats restant exposés au steward. La métrique F1 (couverture × précision)
+permettra de calibrer le seuil.
+
+> C'est une amélioration planifiée, pas un blocage. Le chiffre 0.650 reste valide :
+>c'est la précision **quand l'agent propose** (ce qu'il fait aujourd'hui sur 100 %
+>des résidus). Avec le fix, la couverture baissera (ex. 0.85) et la
+>précision-sur-mappés montera (ex. 0.75) — l'outil deviendra plus **utilisable**
+>en production.
 
 ## Fidélité & hallucination (garde-fous mesurés)
 

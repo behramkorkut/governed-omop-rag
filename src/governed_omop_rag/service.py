@@ -65,7 +65,7 @@ class MappingService:
         retriever = build_retriever(retriever_kind, gold, embedder, store)
         official_map = OfficialMap.from_csv(s.router_map_path)
         self._llm = build_proposer_llm(s)
-        agent = MappingAgent(Proposer(self._llm), Verifier())
+        agent = MappingAgent(Proposer(self._llm), Verifier(), min_margin=s.agent_min_margin)
 
         self._deterministic = DeterministicRouter(official_map)
         self._auto = HybridRouter(official_map, retriever, s.confidence_threshold, s.top_k, agent)

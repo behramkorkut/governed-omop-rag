@@ -102,7 +102,7 @@ class ClaudeProposerLLM:  # pragma: no cover - nécessite une clé API + réseau
         user = f"Libellé source : {query}\n\nCandidats :\n{self._render_candidates(candidates)}"
         message = client.messages.create(
             model=self.model,
-            max_tokens=512,
+            max_tokens=1024,
             system=_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user}],
         )
@@ -111,9 +111,39 @@ class ClaudeProposerLLM:  # pragma: no cover - nécessite une clé API + réseau
             self.input_tokens += int(getattr(usage, "input_tokens", 0) or 0)
             self.output_tokens += int(getattr(usage, "output_tokens", 0) or 0)
 
-        text = message.content[0].text
-        data = json.loads(text)
+        data = json.loads(self._extract_json(message.content))
         return ProposerOutput(
             concept_id=int(data["concept_id"]),
             justification=str(data.get("justification", "")),
         )
+
+    @staticmethod
+    def _extract_json(content: Sequence[object]) -> str:
+        """Extrait le JSON de la réponse.
+
+        Les modèles à raisonnement renvoient un ``ThinkingBlock`` avant le texte :
+        on prend le **premier bloc texte** (attribut ``text``), pas ``content[0]``.
+        On tolère aussi un JSON entouré de prose ou de barrières Markdown.
+        """
+        text = ""
+        for block in content:
+            candidate = getattr(block, "text", None)
+            if isinstance(candidate, str) and candidate.strip():
+                text = candidate
+                break
+        if not text:
+            raise ValueError("Réponse LLM sans bloc texte exploitable.")
+        stripped = text.strip()
+        if stripped.startswith("```"):  # retire ```json ... ```
+            stripped = stripped.strip("`")
+            newline = stripped.find("\n")
+            if newline != -1:
+                stripped = stripped[newline + 1 :]
+        try:
+            json.loads(stripped)
+            return stripped
+        except json.JSONDecodeError:
+            start, end = stripped.find("{"), stripped.rfind("}")
+            if start != -1 and end > start:
+                return stripped[start : end + 1]
+            raise

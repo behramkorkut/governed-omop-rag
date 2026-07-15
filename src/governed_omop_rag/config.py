@@ -109,6 +109,11 @@ class Settings(BaseSettings):
     # --- Garde-fous / gouvernance ---
     confidence_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
     top_k: int = Field(default=10, ge=1, le=100)
+    # Marge de retrieval minimale (score top-1 − top-2) pour que l'agent MAPPE.
+    # En-dessous, l'entrée est jugée ambiguë : l'agent s'abstient (concept_id=0) et
+    # expose les candidats au steward, SANS appeler le LLM (borne le coût).
+    # 0.0 = désactivé (comportement historique : aucune abstention par marge).
+    agent_min_margin: float = Field(default=0.0, ge=0.0)
 
     @property
     def bronze_dir(self) -> Path:

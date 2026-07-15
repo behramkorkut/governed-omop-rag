@@ -163,6 +163,44 @@ def test_build_proposer_llm_key_but_no_package_falls_back(
     assert isinstance(build_proposer_llm(s), FakeProposerLLM)
 
 
+class _ExplodingLLM:
+    """LLM qui échoue si appelé — prouve que l'abstention court-circuite le LLM."""
+
+    def propose(self, query: str, candidates: Sequence[ConceptCandidate]) -> ProposerOutput:
+        raise AssertionError("le LLM ne doit pas être appelé sur un cas ambigu")
+
+
+def test_agent_abstains_on_ambiguous_margin() -> None:
+    # top-1=0.50, top-2=0.49 -> marge 0.01 < seuil 0.05 -> abstention SANS appel LLM.
+    candidates = [_cand(1, 0.50), _cand(2, 0.49)]
+    agent = MappingAgent(Proposer(_ExplodingLLM()), Verifier(), min_margin=0.05)
+    sugg = agent.run(MappingRequest(source_label="x"), candidates)
+    assert sugg.source is MappingSource.UNMAPPED
+    assert sugg.no_map_reason is NoMapReason.CONFIDENCE_INSUFFISANTE
+    assert len(sugg.candidates) == 2  # candidats exposés au steward
+
+
+def test_agent_maps_when_margin_sufficient() -> None:
+    # marge 0.30 >= seuil 0.05 -> mappe normalement.
+    candidates = [_cand(201826, 0.80), _cand(2, 0.50)]
+    agent = MappingAgent(Proposer(FakeProposerLLM()), Verifier(), min_margin=0.05)
+    sugg = agent.run(MappingRequest(source_label="x"), candidates)
+    assert sugg.source is MappingSource.RAG
+    assert sugg.target_concept_id == 201826
+
+
+def test_agent_margin_disabled_by_default() -> None:
+    # min_margin=0 (défaut) -> aucune abstention par marge, même très serrée.
+    candidates = [_cand(201826, 0.50), _cand(2, 0.499)]
+    sugg = _agent(FakeProposerLLM()).run(MappingRequest(source_label="x"), candidates)
+    assert sugg.source is MappingSource.RAG
+
+
+def test_agent_rejects_negative_margin() -> None:
+    with pytest.raises(ValueError):
+        MappingAgent(Proposer(FakeProposerLLM()), Verifier(), min_margin=-0.1)
+
+
 def test_agent_respects_expected_domain() -> None:
     # Bon concept mais mauvais domaine -> FAIL -> pas de candidat validé.
     candidates = [_cand(1, domain="Drug")]
