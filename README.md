@@ -12,11 +12,12 @@
 ![Docker](https://img.shields.io/badge/docker--compose-api%20%2B%20ui%20%2B%20qdrant-2496ED)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-> **Statut : Phase 5/6 — fonctionnel de bout en bout.** Corpus médaillon, retrieval
-> hybride (BM25 + dense), router déterministe + RAG agentique gouverné (Proposer +
-> Vérificateur, LangGraph), API REST, UI Streamlit de revue steward, évaluation
-> mesurable, feedback. Benchmark sur gold set réel (données ATIH) et démo hébergée
-> en cours. Suivi phase par phase : [`feature_list.json`](feature_list.json).
+> **Statut : fonctionnel de bout en bout, benchmark réel mesuré.** Corpus médaillon,
+> retrieval hybride (BM25 + BioLORD), router déterministe + RAG agentique gouverné
+> (Proposer + Vérificateur, LangGraph), API REST, UI Streamlit de revue steward,
+> évaluation chiffrée sur **gold set réel ATIH/OHDSI** (Claude Sonnet 5 inclus),
+> porte d'abstention, feedback. Suivi phase par phase :
+> [`feature_list.json`](feature_list.json).
 
 ---
 
@@ -28,7 +29,7 @@ reproductible multicentrique, il faut les **traduire vers les vocabulaires stand
 OHDSI** (SNOMED-CT, RxNorm, LOINC…). Ce mapping est aujourd'hui **manuel et coûteux** ;
 l'outil de référence (Usagi) fait du string-matching limité (~44 % sur certains cas).
 
-## L'approche — hybride & gouvernée
+## L'approche : hybride & gouvernée
 
 ```mermaid
 flowchart LR
@@ -48,13 +49,48 @@ On n'utilise l'IA **que là où elle apporte** : match officiel d'abord (gratuit
 fiable), RAG agentique **uniquement sur le résidu** (coût borné). L'agent
 **propose**, le steward **dispose**. Sortie fermée = anti-hallucination structurel.
 
-## Aperçu (UI de revue steward)
+## Ce que l'outil résout — et ce qu'il ne prétend pas résoudre
 
-![UI de revue steward](docs/assets/ui.png)
+Le parti pris est assumé : **on ne prétend pas mapper 100 % des codes
+automatiquement.** On mesure ce que chaque couche apporte, sur les **42 886 codes
+CIM-10 FR** du vocabulaire OHDSI.
 
-_L'UI Streamlit permet d'importer un fichier CSV/Excel, de visualiser les
-suggestions justifiées (score, source, candidats), et d'accepter / corriger /
-rejeter chaque ligne. Voir le [guide utilisateur](docs/guide_utilisateur.md)._
+| Couche | Part des codes | Comment | Précision | Coût |
+|---|---|---|---|---|
+| Alignement officiel **1-à-1** (déterministe) | **31,8 %** | lookup ATIH/OHDSI « Maps to » univoque | 100 % (par construction) | 0, instantané |
+| Officiellement mappé mais **ambigu** (1-à-plusieurs) | ~6,2 % | le RAG propose, le steward tranche | mesurée | LLM borné |
+| **Sans mapping officiel** (rare, régional, non encodé) | ~62 % | retrieval sémantique + jugement LLM gouverné | mesurée | LLM borné |
+
+Un **tiers** des codes est résolu gratuitement et sans erreur ; les **deux tiers
+restants** — le vrai travail difficile — sont là où le RAG agentique gouverné propose
+des candidats justifiés que l'humain valide. « Pas de mapping officiel » ne veut pas
+dire « pas d'équivalent » : le RAG aide aussi à **découvrir** des correspondances non
+encore encodées.
+
+### Résultats mesurés — pas estimés (gold set réel ATIH, 80 conditions, résidu held-out)
+
+| Approche | Top-1 | recall@5 |
+|---|---|---|
+| baseline lexicale (proxy Usagi) | 0.325 | 0.487 |
+| BM25 | 0.300 | 0.613 |
+| BioLORD dense (sémantique seul) | 0.188 | 0.525 |
+| **hybride BM25 + BioLORD (fusion RRF)** | **0.412** | **0.700** |
+| **+ Proposer Claude Sonnet 5** (mapping final) | **0.650** | — |
+
+Le retrieval hybride place le bon concept dans le **top-5 pour 70 %** du résidu ; le
+jugement de Claude le choisit correctement **65 %** du temps (contre 41 % sans LLM),
+pour **~0,005 $/code**. Détail complet — plancher, échecs, courbe d'abstention
+(« savoir dire je ne sais pas ») : [`docs/evaluation.md`](docs/evaluation.md).
+
+### Une brique, pas une révolution
+
+L'outil de référence sur ce mapping (Usagi) fait du string-matching lexical. La
+contribution ici est **méthodologique et d'ingénierie** : appliquer une architecture
+**déterministe-d'abord → RAG agentique gouverné → human-in-the-loop** au mapping
+CIM-10 FR → OMOP, et surtout **le mesurer honnêtement** sur données réelles ATIH/OHDSI
+— plancher, échecs et coûts compris. C'est un **avancement relatif** et reproductible :
+une base ouverte sur laquelle comparer, s'appuyer et contribuer. On ne dit pas que
+c'est mieux ; on montre, chiffres à l'appui, **où** et **à quel coût** l'IA aide.
 
 ## Ce que ça démontre
 
@@ -83,9 +119,9 @@ rejeter chaque ligne. Voir le [guide utilisateur](docs/guide_utilisateur.md)._
 | Export `source_to_concept_map` + feedback steward | ✅ |
 | Évaluation (Top-k, couverture, coût/latence, baseline) | ✅ |
 | Docs (architecture, gouvernance, souveraineté, IA Act) | ✅ |
-| Gold set **réel** (ATIH) + benchmark chiffré | ⏳ (données à fournir) |
-| Expansion de requête · reranking cross-encoder | ⏳ |
-| Démo hébergée publique | ⏳ |
+| Gold set **réel** (ATIH) + benchmark chiffré (dont Claude Sonnet 5) | ✅ |
+| Porte d'abstention (marge de retrieval, « je ne sais pas ») | ✅ |
+| Expansion de requête · reranking cross-encoder | ⏳ (pistes d'amélioration) |
 
 ## Démarrage rapide
 
