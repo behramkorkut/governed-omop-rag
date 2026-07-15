@@ -111,8 +111,8 @@ nom/synonymes) pour comparer, à armes égales et partout, notre retrieval.
 | baseline lexicale (proxy Usagi) | 80 | 0.325 | 0.438 | 0.487 | 0.380 |
 | BM25 (lexical) | 80 | 0.300 | 0.562 | 0.613 | 0.433 |
 | dense — `hashing` (plancher non-sémantique) | 80 | 0.113 | 0.150 | 0.188 | 0.138 |
-| dense — **BioLORD** (sémantique) | 80 | _à compléter_ | _—_ | _—_ | _—_ |
-| hybride RRF — **BioLORD** | 80 | _à compléter_ | _—_ | _—_ | _—_ |
+| dense — **BioLORD** (sémantique) | 80 | 0.188 | 0.438 | 0.525 | 0.321 |
+| **hybride RRF — BM25 + BioLORD** | 80 | **0.412** | **0.588** | **0.700** | **0.520** |
 
 > Le plancher `hashing` est un **embedding par hachage** (256 dim) : sur 105 k
 > concepts, les **collisions** produisent des scores ex æquo. Le Top-1 est stable
@@ -120,15 +120,29 @@ nom/synonymes) pour comparer, à armes égales et partout, notre retrieval.
 > tie-break — c'est attendu d'un plancher non-sémantique, et sans incidence sur les
 > lignes lexicales/BioLORD (déterministes).
 
-**Lecture.** Sur un vrai corpus, les stratégies se départagent enfin. Le **BM25**
-dépasse déjà la baseline proxy-Usagi au rappel (recall@5 : **0.613 vs 0.487**) : un
-lexical bien pondéré (TF-IDF/BM25) bat le simple match+Jaccard. La ligne `hashing`
-est un **plancher** : embedding purement lexical par hachage, non sémantique — il
-n'est là que pour valider la chaîne. Les lignes **BioLORD** (embedding biomédical)
-et **hybride** (fusion BM25 + dense par Reciprocal Rank Fusion) sont laissées à
-compléter : leur intérêt — synonymie, reformulations, « glycémie élevée » ↔ diabète
-— ne se mesure qu'avec l'embedding sémantique, dont le calcul sur ~105 k concepts
-est coûteux (une passe de plusieurs dizaines de minutes sur CPU).
+**Lecture.** Sur un vrai corpus, les stratégies se départagent enfin, et le résultat
+est instructif — ni le lexical seul, ni le sémantique seul ne gagne, c'est **leur
+fusion** :
+
+- Le **BM25** (0.300 Top-1 / 0.613 recall@5) dépasse la baseline proxy-Usagi (0.325 /
+  0.487) au rappel : un lexical bien pondéré bat le simple match exact + Jaccard.
+- Le **dense BioLORD seul** (0.188 Top-1) **ne bat pas** le lexical : les libellés du
+  gold set sont des descriptions CIM-10 **administratives et verbeuses** (« Toxic
+  effect: Paints and dyes… »), où le recouvrement de mots (BM25) prime sur la
+  proximité sémantique. C'est un phénomène **connu en mapping de terminologies** — et
+  le mesurer, plutôt que de supposer que « l'embedding est toujours meilleur », est
+  précisément ce qui rend le protocole crédible. (Le dense double tout de même le
+  plancher `hashing`, 0.113 → 0.188 : le modèle a bien chargé.)
+- L'**hybride RRF (BM25 + BioLORD)** remporte tout : **0.412 Top-1** et **0.700
+  recall@5** — nettement au-dessus de chaque composant pris isolément. La fusion
+  récupère les cas où le lexical échoue mais le sémantique aide, et inversement. Le
+  bon concept SNOMED est dans le **top-5 pour 70 %** des codes du résidu — le steward
+  tranche vite.
+
+**Coût de l'amélioration** (argument d'ingénierie honnête) : indexer les 105 324
+concepts `Condition` avec BioLORD prend **~43 min sur CPU** (une passe, réutilisable
+via `--reuse-index`). La qualité se paie ; l'hybride justifie ce coût, le dense seul
+non.
 
 > Honnêteté méthodologique : on **ne prétend pas** battre l'état de l'art. On publie
 > un protocole reproductible, un gold set réel et des chiffres bruts — y compris le
@@ -142,16 +156,18 @@ Proposer hors-ligne) :
 
 | n | Top-1 (global) | couverture | précision (mappés) | latence |
 |---|---|---|---|---|
-| 80 | 0.275 | 1.000 | 0.275 | 75.8 ms/entrée |
+| 80 | **0.412** | 1.000 | **0.412** | **198 ms/entrée** |
 
-Deux lectures utiles. (1) La **précision de bout en bout** (0.275) reflète le
-retrieval **hybride** (meilleur que le plancher hashing 0.113) suivi du choix du
-Proposer — cohérent avec le Top-1 de BM25. (2) La **couverture = 1.000** vient du
-Proposer **hors-ligne** (`FakeProposerLLM`), qui choisit toujours un candidat et ne
-s'abstient jamais. Avec le **vrai** Proposer (Claude) + le Vérificateur + le seuil
-de confiance, les cas douteux **s'abstiennent** (`concept_id = 0`) : la couverture
-baisse et la précision-sur-mappés monte — l'outil « sait dire je ne sais pas ». La
-décision finale reste **toujours** au steward.
+Deux lectures utiles. (1) La **précision de bout en bout** (0.412) reflète le
+retrieval **hybride** (0.412 Top-1, meilleur que BM25 seul 0.300) suivi du choix du
+Proposer — cohérent : le Proposer hors-ligne (`FakeProposerLLM`) retourne le 1er
+candidat du retriever, donc le Top-1 mapping = Top-1 retrieval. (2) La **couverture
+= 1.000** vient du Proposer **hors-ligne** (`FakeProposerLLM`), qui choisit
+toujours un candidat et ne s'abstient jamais. Avec le **vrai** Proposer (Claude) +
+le Vérificateur + le seuil de confiance, les cas douteux **s'abstiennent**
+(`concept_id = 0`) : la couverture baisse et la précision-sur-mappés monte —
+l'outil « sait dire je ne sais pas ». La décision finale reste **toujours** au
+steward.
 
 ## Fidélité & hallucination (garde-fous mesurés)
 
@@ -179,12 +195,14 @@ pas — c'est la différence entre « on a mis un garde-fou » et « on prouve q
 | 1 | **Corpus réel** — bundle Athena → `gor build-corpus` (831 k concepts, ~105 k Condition) | ✅ fait |
 | 2 | **Gold set réel** — 80 mappings CIM-10 FR → SNOMED (1-à-1, `scripts/build_gold_set.py`) | ✅ fait |
 | 3 | **Baselines chiffrées** — proxy Usagi + BM25 sur le gold set réel | ✅ fait |
-| 4 | **Embedding sémantique BioLORD** — `--embedding-backend sentence_transformers` | ⏳ à lancer (coûteux) |
-| 5 | **Alignement officiel enrichi** — remplacer `cim10_snomed_official.csv` par l'alignement ATIH complet | ⏳ |
+| 4 | **Embedding sémantique BioLORD** — `--embedding-backend sentence_transformers` | ✅ fait |
+| 5 | **Alignement officiel enrichi** — `cim10_snomed_official.csv` depuis le bundle ATIH (13 651 paires, held-out propre) | ✅ fait |
 | 6 | **Gold set enrichi steward** — `FeedbackStore.to_gold_records()` produit des entrées `gold_set.csv` | ⏳ (boucle continue) |
 
-Il ne reste, pour un benchmark pleinement citable, qu'à lancer la passe **BioLORD**
-(étape 4) et à reporter ses deux lignes dans le tableau ci-dessus.
+Le benchmark est désormais **pleinement mesuré** : le tableau ci-dessus contient les
+chiffres bruts (baselines, BioLORD, hybride) sur un gold set réel et un corpus réel.
+La ligne « BioLORD » a été obtenue après ~43 min d'indexation CPU ; l'hybride est
+réutilisable instantanément (`--reuse-index`).
 
 ## Régression
 

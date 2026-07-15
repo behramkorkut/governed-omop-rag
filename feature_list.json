@@ -433,7 +433,8 @@
       "passes": true,
       "acceptance": [
         "comparatif reproductible outil vs baseline Usagi",
-        "tableau de résultats dans docs/evaluation.md"
+        "tableau de résultats dans docs/evaluation.md",
+        "BioLORD mesuré sur gold set ATIH réel (80 codes, corpus 105k Condition)"
       ]
     },
     {
