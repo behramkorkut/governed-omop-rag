@@ -19,7 +19,10 @@ from governed_omop_rag.config import (  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures"
-ROUTER_MAP = ROOT / "data" / "router" / "cim10_snomed_official.csv"
+# Map officielle FIXTURE (contrôlée) : le test ne doit pas dépendre du fichier de
+# production réel (data/router/…), dont le contenu évolue avec le vrai alignement ATIH.
+# Contient E11.9 -> 201826 ; Z99.9 en est volontairement ABSENT (cas « unmapped »).
+ROUTER_MAP = FIXTURES / "router_map.csv"
 
 
 def _client() -> TestClient:
