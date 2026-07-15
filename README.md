@@ -49,7 +49,7 @@ On n'utilise l'IA **que là où elle apporte** : match officiel d'abord (gratuit
 fiable), RAG agentique **uniquement sur le résidu** (coût borné). L'agent
 **propose**, le steward **dispose**. Sortie fermée = anti-hallucination structurel.
 
-## Ce que l'outil résout — et ce qu'il ne prétend pas résoudre
+## Ce que l'outil résout et ce qu'il ne prétend pas résoudre
 
 Le parti pris est assumé : **on ne prétend pas mapper 100 % des codes
 automatiquement.** On mesure ce que chaque couche apporte, sur les **42 886 codes
@@ -67,7 +67,7 @@ des candidats justifiés que l'humain valide. « Pas de mapping officiel » ne v
 dire « pas d'équivalent » : le RAG aide aussi à **découvrir** des correspondances non
 encore encodées.
 
-### Résultats mesurés — pas estimés (gold set réel ATIH, 80 conditions, résidu held-out)
+### Résultats mesurés et non pas estimés (gold set réel ATIH, 80 conditions, résidu held-out)
 
 | Approche | Top-1 | recall@5 |
 |---|---|---|
@@ -79,7 +79,7 @@ encore encodées.
 
 Le retrieval hybride place le bon concept dans le **top-5 pour 70 %** du résidu ; le
 jugement de Claude le choisit correctement **65 %** du temps (contre 41 % sans LLM),
-pour **~0,005 $/code**. Détail complet — plancher, échecs, courbe d'abstention
+pour **~0,005 $/code**. Détail complet, plancher, échecs, courbe d'abstention
 (« savoir dire je ne sais pas ») : [`docs/evaluation.md`](docs/evaluation.md).
 
 ### Une brique, pas une révolution
@@ -87,10 +87,27 @@ pour **~0,005 $/code**. Détail complet — plancher, échecs, courbe d'abstenti
 L'outil de référence sur ce mapping (Usagi) fait du string-matching lexical. La
 contribution ici est **méthodologique et d'ingénierie** : appliquer une architecture
 **déterministe-d'abord → RAG agentique gouverné → human-in-the-loop** au mapping
-CIM-10 FR → OMOP, et surtout **le mesurer honnêtement** sur données réelles ATIH/OHDSI
-— plancher, échecs et coûts compris. C'est un **avancement relatif** et reproductible :
+CIM-10 FR → OMOP, et surtout **le mesurer** sur données réelles ATIH/OHDSI
+avec plancher, échecs et coûts compris. C'est un **avancement relatif** et reproductible :
 une base ouverte sur laquelle comparer, s'appuyer et contribuer. On ne dit pas que
 c'est mieux ; on montre, chiffres à l'appui, **où** et **à quel coût** l'IA aide.
+
+## S'inscrit dans un écosystème : le maillon manquant de `synthea-to-omop-fhir`
+
+Ce projet ne vit pas isolé : il **comble un manque explicitement identifié** par un
+projet amont, [`synthea-to-omop-fhir`](https://github.com/behramkorkut/synthea-to-omop-fhir)
+(pipeline **Synthea → OMOP CDM → FHIR**, gouverné et souverain).
+
+Ce pipeline amont construit fidèlement la structure OMOP en **préservant les codes
+source**, mais isole le mapping vers les `concept_id` **standard** en une étape à part
+— laissant des **`concept_id = 0`** pour les codes non mappés (avec une métrique de
+couverture). Sa roadmap prévoyait justement un « *LLM/RAG concept-mapping assistant
+(Usagi/Llettuce-style)* » pour combler ce trou, **non encore réalisé** de son côté.
+
+**`governed-omop-rag` est cette brique.** Le `source_to_concept_map` validé par le
+steward qu'il produit se **réinjecte** en amont pour remplacer les `concept_id = 0`
+par des concepts standard. Deux projets, un seul contrat d'échange (table OMOP
+standard), couplage minimal. Détail de la boucle : [`docs/reinjection.md`](docs/reinjection.md).
 
 ## Ce que ça démontre
 

@@ -2,16 +2,23 @@
 
 > Comment le `source_to_concept_map` validé par les stewards (produit ici) est
 > réutilisé en amont pour remplacer les `concept_id = 0` (codes non mappés) dans
-> un entrepôt OMOP généré par [`synthea-to-omop-fhir`](https://github.com/synthetichealth/synthea).
+> l'entrepôt OMOP généré par
+> [`synthea-to-omop-fhir`](https://github.com/behramkorkut/synthea-to-omop-fhir).
+
+> **Ce projet réalise une extension planifiée du pipeline amont.** La roadmap de
+> `synthea-to-omop-fhir` prévoit un « *LLM/RAG concept-mapping assistant
+> (Usagi/Llettuce-style)* » pour **combler le trou `concept_id = 0`**, non encore
+> réalisé de son côté. `governed-omop-rag` **est** cette brique.
 
 ---
 
 ## 1. Le problème amont
 
-Un pipeline de génération OMOP (type `synthea-to-omop-fhir`) transforme des
-données patient (FHIR / Synthea) vers le **CDM OMOP**. À l'étape de standardisation,
-chaque code source doit pointer vers un **concept standard OHDSI** (`standard_concept = 'S'`)
-via la table `concept` et l'alignement des vocabulaires.
+[`synthea-to-omop-fhir`](https://github.com/behramkorkut/synthea-to-omop-fhir)
+transforme des données patient (Synthea → **OMOP CDM** → FHIR). Il construit la
+structure OMOP en **préservant les codes source**, mais isole le mapping vers les
+`concept_id` **standard OHDSI** (`standard_concept = 'S'`) en une **étape à part**
+(vocabulaire OHDSI / Athena), avec une métrique de couverture.
 
 Quand un code source n'a **aucune correspondance** connue — nomenclature locale
 (CIM-10 FR / ATIH), libellé en texte libre, code absent des tables d'alignement
