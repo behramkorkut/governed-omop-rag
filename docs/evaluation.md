@@ -73,6 +73,29 @@ GOR_QDRANT_COLLECTION=ohdsi_biolord uv run gor eval \
 GOR_QDRANT_COLLECTION=ohdsi_biolord uv run gor eval ... --retriever hybrid --reuse-index
 ```
 
+## Couche déterministe (alignement officiel) — la vraie force
+
+Avant tout RAG, le router résout les codes couverts par l'**alignement officiel
+CIM-10 FR → SNOMED** (`data/router/cim10_snomed_official.csv`, construit par
+`scripts/build_official_map.py` depuis le bundle Athena). Sur les 42 886 codes
+CIM-10 FR du vocabulaire :
+
+| Couche | Codes | Part | Précision | Coût LLM |
+|---|---|---|---|---|
+| **Alignement officiel 1-à-1** (déterministe) | 13 651 | **31.8 %** | 100 % (par construction) | **0** |
+| Résidu (rare, ambigu, non aligné) → RAG gouverné + steward | reste | 68.2 % | mesurée sur held-out | borné |
+
+C'est le cœur de la proposition : **on n'utilise l'IA que là où elle apporte**.
+Près d'un tiers des codes sont mappés **gratuitement, sans erreur, sans LLM** ;
+le RAG ne travaille que sur ce qui reste.
+
+> **Anti-fuite (held-out).** Le gold set (80 codes) est **exclu** de la map
+> officielle (`--exclude-gold`). Sans ça, le déterministe recopierait les réponses
+> du gold set (évaluation circulaire). Les 80 codes restent donc du **résidu** : ils
+> partent au RAG, et le benchmark de retrieval ci-dessous reste un vrai test à
+> l'aveugle. C'est la différence entre « mon outil a 100 % » (faux, table de lookup)
+> et « ma couche officielle couvre 31.8 %, mesuré, et je teste l'IA sur le reste ».
+
 ## Benchmark vs Usagi (proxy honnête)
 
 Usagi (OHDSI) fait du **string-matching semi-automatique** (précision indicative
@@ -87,9 +110,15 @@ nom/synonymes) pour comparer, à armes égales et partout, notre retrieval.
 |---|---|---|---|---|---|
 | baseline lexicale (proxy Usagi) | 80 | 0.325 | 0.438 | 0.487 | 0.380 |
 | BM25 (lexical) | 80 | 0.300 | 0.562 | 0.613 | 0.433 |
-| dense — `hashing` (plancher non-sémantique) | 80 | 0.113 | 0.212 | 0.237 | 0.160 |
+| dense — `hashing` (plancher non-sémantique) | 80 | 0.113 | 0.150 | 0.188 | 0.138 |
 | dense — **BioLORD** (sémantique) | 80 | _à compléter_ | _—_ | _—_ | _—_ |
 | hybride RRF — **BioLORD** | 80 | _à compléter_ | _—_ | _—_ | _—_ |
+
+> Le plancher `hashing` est un **embedding par hachage** (256 dim) : sur 105 k
+> concepts, les **collisions** produisent des scores ex æquo. Le Top-1 est stable
+> (0.113) mais les recall@3/@5 **fluctuent légèrement** d'un run à l'autre selon le
+> tie-break — c'est attendu d'un plancher non-sémantique, et sans incidence sur les
+> lignes lexicales/BioLORD (déterministes).
 
 **Lecture.** Sur un vrai corpus, les stratégies se départagent enfin. Le **BM25**
 dépasse déjà la baseline proxy-Usagi au rappel (recall@5 : **0.613 vs 0.487**) : un
@@ -104,6 +133,25 @@ est coûteux (une passe de plusieurs dizaines de minutes sur CPU).
 > Honnêteté méthodologique : on **ne prétend pas** battre l'état de l'art. On publie
 > un protocole reproductible, un gold set réel et des chiffres bruts — y compris le
 > plancher. « On ne dit pas que c'est mieux, on le mesure. »
+
+### Mapping de bout en bout (pipeline complet, résidu held-out)
+
+`gor eval-map --strategy auto` sur les 80 codes du gold set (tous **held-out** de
+l'alignement officiel → routés vers le RAG gouverné, retrieval **hybride**,
+Proposer hors-ligne) :
+
+| n | Top-1 (global) | couverture | précision (mappés) | latence |
+|---|---|---|---|---|
+| 80 | 0.275 | 1.000 | 0.275 | 75.8 ms/entrée |
+
+Deux lectures utiles. (1) La **précision de bout en bout** (0.275) reflète le
+retrieval **hybride** (meilleur que le plancher hashing 0.113) suivi du choix du
+Proposer — cohérent avec le Top-1 de BM25. (2) La **couverture = 1.000** vient du
+Proposer **hors-ligne** (`FakeProposerLLM`), qui choisit toujours un candidat et ne
+s'abstient jamais. Avec le **vrai** Proposer (Claude) + le Vérificateur + le seuil
+de confiance, les cas douteux **s'abstiennent** (`concept_id = 0`) : la couverture
+baisse et la précision-sur-mappés monte — l'outil « sait dire je ne sais pas ». La
+décision finale reste **toujours** au steward.
 
 ## Fidélité & hallucination (garde-fous mesurés)
 

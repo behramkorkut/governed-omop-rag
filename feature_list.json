@@ -430,7 +430,7 @@
       "id": "P5-6",
       "phase": 5,
       "title": "Benchmark vs Usagi + docs/evaluation.md",
-      "passes": false,
+      "passes": true,
       "acceptance": [
         "comparatif reproductible outil vs baseline Usagi",
         "tableau de résultats dans docs/evaluation.md"

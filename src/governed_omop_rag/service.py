@@ -46,6 +46,8 @@ class MappingService:
         settings: Settings | None = None,
         bronze_dir: Path | None = None,
         domains: Sequence[str] | None = None,
+        retriever_kind: str = "hybrid",
+        reuse_index: bool = False,
     ) -> None:
         s = settings or get_settings()
         embedder = get_embedder(s)
@@ -56,9 +58,11 @@ class MappingService:
             gold = fetch_gold(con)
         finally:
             con.close()
-        self.concepts_indexed = index_gold(gold, embedder, store)
+        # reuse_index : la collection vectorielle est déjà remplie (évite de
+        # ré-embarquer ~10^5 concepts entre deux évaluations).
+        self.concepts_indexed = store.count() if reuse_index else index_gold(gold, embedder, store)
 
-        retriever = build_retriever("hybrid", gold, embedder, store)
+        retriever = build_retriever(retriever_kind, gold, embedder, store)
         official_map = OfficialMap.from_csv(s.router_map_path)
         self._llm = build_proposer_llm(s)
         agent = MappingAgent(Proposer(self._llm), Verifier())
