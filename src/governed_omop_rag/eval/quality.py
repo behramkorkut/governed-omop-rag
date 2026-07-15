@@ -19,20 +19,11 @@ import unicodedata
 from collections.abc import Iterable, Sequence
 
 # Mots-outils FR/EN ignorés : ils ne portent pas de signal clinique et fausseraient
-# la mesure de faithfulness (« the », « de », « with »... sont partout).
-_STOPWORDS = frozenset(
-    {
-        # français
-        "le", "la", "les", "un", "une", "des", "du", "de", "et", "ou", "à", "au",
-        "aux", "en", "dans", "sur", "sous", "par", "pour", "avec", "sans", "ce",
-        "cet", "cette", "ces", "est", "sont", "qui", "que", "quoi", "dont", "se",
-        "sa", "son", "ses", "plus", "moins", "type",
-        # anglais
-        "the", "a", "an", "of", "and", "or", "to", "in", "on", "for", "with",
-        "without", "is", "are", "this", "that", "these", "those", "as", "by",
-        "at", "from", "not", "other", "unspecified", "due",
-    }
-)
+# la mesure de faithfulness (« the », « de », « with »... sont partout). Défini via
+# une chaîne pour rester compact et stable au formatage (ruff format).
+_STOPWORDS_FR = "le la les un une des du de et ou à au aux en dans sur sous par pour avec sans ce cet cette ces est sont qui que quoi dont se sa son ses plus moins type"  # noqa: E501
+_STOPWORDS_EN = "the a an of and or to in on for with without is are this that these those as by at from not other unspecified due"  # noqa: E501
+_STOPWORDS = frozenset(_STOPWORDS_FR.split()) | frozenset(_STOPWORDS_EN.split())
 
 _MIN_TOKEN_LEN = 3
 
