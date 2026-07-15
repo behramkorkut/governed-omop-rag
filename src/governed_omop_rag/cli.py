@@ -454,6 +454,15 @@ def eval_map(
             help="Réutilise la collection vectorielle déjà remplie (ne ré-embarque pas le corpus).",
         ),
     ] = False,
+    offline: Annotated[
+        bool,
+        typer.Option(
+            "--offline",
+            help="Force le Proposer hors-ligne (FakeProposerLLM), même si une clé "
+            "Anthropic est présente (shell ou .env). Utile pour régler les seuils "
+            "sans coût LLM.",
+        ),
+    ] = False,
 ) -> None:
     """Évalue le MAPPING final (Top-1, couverture, précision) via le pipeline complet."""
     from governed_omop_rag.config import EmbeddingBackend, VectorBackend
@@ -468,6 +477,9 @@ def eval_map(
         overrides["embedding_backend"] = EmbeddingBackend(embedding_backend)
     if vector_backend:
         overrides["vector_backend"] = VectorBackend(vector_backend)
+    if offline:
+        # Neutralise toute clé (shell OU .env) -> build_proposer_llm renvoie le Fake.
+        overrides["anthropic_api_key"] = None
     if overrides:
         settings = settings.model_copy(update=overrides)
 

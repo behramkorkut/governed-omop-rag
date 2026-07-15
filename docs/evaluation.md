@@ -176,43 +176,51 @@ in / 65 out par entrée, soit **≈ 0,005 $/entrée** aux tarifs Sonnet publics 
 sur la facturation) — et le LLM ne voit **que le résidu**, jamais les 31.8 % couverts
 par l'alignement officiel. (3) **Latence** : 198 → 2718 ms/entrée (l'appel réseau au
 LLM domine) — un coût assumé pour du mapping par lots supervisé, pas du temps réel.
-(4) **Couverture = 1.000** : sur ces 80 conditions, chaque candidat du retriever est
-un concept SNOMED standard valide, donc le Vérificateur les accepte et l'agent ne
-s'abstient jamais. L'abstention (`concept_id = 0`) reste possible par construction
-(aucun candidat, ou violation de sortie fermée) ; un **seuil de confiance sur la voie
-agent** pour provoquer l'abstention sur cas douteux est une amélioration identifiée.
-La décision finale reste **toujours** au steward.
+(4) **Couverture = 1.000 ici** : sans porte d'abstention, chaque candidat étant un
+SNOMED standard valide, le Vérificateur accepte et l'agent mappe toujours. Une **porte
+d'abstention par marge de retrieval** est maintenant implémentée (voir section
+suivante) : activée, elle fait dire « je ne sais pas » sur les cas ambigus. La
+décision finale reste **toujours** au steward.
 
-### ⚠️ Bug identifié : couverture artificiellement à 100 % (voie agent)
+### Porte d'abstention — « savoir dire je ne sais pas » (implémenté & mesuré)
 
-**Constat.** Quand l'agent Proposer est branché (`--agent`), le `HybridRouter`
-court-circuite le seuil de confiance (`hybrid.py:73-74`) : l'agent décide sur tous
-les résidus, même les plus douteux. Le Vérificateur ne vérifie que les règles OMOP
-(standard='S', domaine) — tous les candidats du retriever étant des SNOMED standard,
-il passe toujours → **aucune abstention**.
+Sans garde-fou, l'agent mappe **tout** le résidu (couverture 100 %), même les cas
+ambigus : le steward valide alors mécaniquement et la précision cache du bruit. On a
+donc ajouté une **porte d'abstention par marge de retrieval** : si l'écart de score
+entre le **1er et le 2e candidat** (top-1 − top-2 en fusion RRF) est sous un seuil,
+l'entrée est jugée trop ambiguë → l'agent renvoie `concept_id = 0` et expose les
+candidats au steward, **sans même appeler le LLM** (coût borné). Réglable via
+`GOR_AGENT_MIN_MARGIN` ; **désactivé par défaut** (`0.0`, rétro-compatible).
 
-**Impact.** La couverture = 1.000 est artificielle. En production, on veut que
-l'outil dise « je ne sais pas » quand le match est ambigu — sinon le steward valide
-mécaniquement et la précision apparente cache du bruit.
+**Courbe couverture / marge** (mesurée hors-ligne, gratuite ; la couverture ne dépend
+que du retrieval, donc identique sous Claude) :
 
-**Piste de correction.** Un signal d'abstention adapté à la voie agent :
+| `GOR_AGENT_MIN_MARGIN` | 0.005 | 0.010 | 0.015 | 0.020 |
+|---|---|---|---|---|
+| couverture | 0.787 | 0.700 | 0.662 | 0.600 |
 
-| Signal | Description | Seuil |
-|---|---|---|
-| **Marge top-1 / top-2** | Si le score RRF du 1er est très proche du 2ème → ambigu | marge < 0.01 |
-| **Rang du candidat choisi** | Si Claude choisit le 4ème ou 5ème → peu confiant | rang ≥ 3 |
-| **Score cosinus dense** | Score BioLORD du candidat choisi (indépendant du RRF) | < 0.3 |
+**Deux points d'opération sous Claude Sonnet 5** (hybride BioLORD, résidu held-out) :
 
-Implémentation : dans `MappingAgent.run()`, après le choix de Claude, évaluer le
-signal. Si le signal est sous le seuil → retourner `concept_id=0` + `NoMapReason.AMBIGU`,
-les candidats restant exposés au steward. La métrique F1 (couverture × précision)
-permettra de calibrer le seuil.
+| Marge | couverture | précision (mappés) | Top-1 (global) |
+|---|---|---|---|
+| 0 (off, défaut) | 1.000 | 0.650 | 0.650 |
+| **0.005 (recommandé)** | 0.787 | **0.698** | 0.550 |
 
-> C'est une amélioration planifiée, pas un blocage. Le chiffre 0.650 reste valide :
->c'est la précision **quand l'agent propose** (ce qu'il fait aujourd'hui sur 100 %
->des résidus). Avec le fix, la couverture baissera (ex. 0.85) et la
->précision-sur-mappés montera (ex. 0.75) — l'outil deviendra plus **utilisable**
->en production.
+**Ce que ça démontre.** La porte isole correctement la « zone de doute » : sur les
+21 % d'entrées mises en abstention, seules **~47 %** auraient été correctes, contre
+**70 %** sur les entrées auto-mappées. Le tool met donc de côté ce qu'il maîtrise mal
+et livre au steward un ensemble plus fiable (précision 0.650 → **0.698**). Le Top-1
+**global** baisse (0.650 → 0.550) car des cas corrects passent en abstention : c'est le
+compromis **précision ↔ couverture** classique. En human-in-the-loop, une précision
+plus haute **et** un « je ne sais pas » explicite valent mieux qu'un mapping
+systématique — le steward relit de toute façon les abstentions.
+
+> **Honnêteté sur ce chiffre.** Le point à marge 0.005 sous Claude est une mesure
+> **complète** (80/80 entrées), mais obtenue lors d'un balayage dont les marges
+> suivantes ont été interrompues (529 API) — il n'a pas été rejoué dans un run
+> indépendant. La couverture 0.787 est, elle, confirmée par le balayage hors-ligne.
+> `GOR_AGENT_MIN_MARGIN=0.005` est la valeur **recommandée** ; la config reste à `0.0`
+> pour ne rien imposer.
 
 ## Fidélité & hallucination (garde-fous mesurés)
 

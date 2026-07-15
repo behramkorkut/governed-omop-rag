@@ -83,7 +83,10 @@ class ClaudeProposerLLM:  # pragma: no cover - nécessite une clé API + réseau
                 raise ImportError(
                     "anthropic requis pour ce backend. uv sync --extra agents"
                 ) from exc
-            self._client = anthropic.Anthropic(api_key=self.api_key)
+            # max_retries : le SDK réessaie avec back-off exponentiel sur les
+            # erreurs transitoires (429 rate limit, 500, 529 overloaded). On monte
+            # la valeur pour qu'un pic de charge côté API ne tue pas un run par lots.
+            self._client = anthropic.Anthropic(api_key=self.api_key, max_retries=6)
         return self._client
 
     @staticmethod
