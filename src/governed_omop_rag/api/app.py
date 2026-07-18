@@ -104,10 +104,14 @@ def create_app(settings: Settings | None = None, bronze_dir: Path | None = None)
         # est l'IP du proxy → sans ceci, tous les utilisateurs partageraient un
         # seul quota. On prend la 1re IP de X-Forwarded-For (l'IP réelle du
         # client) quand l'en-tête est présent.
+        # str(...) explicite : selon la version de Starlette, headers.get() et
+        # client.host peuvent être typés Any → warn_return_any (mypy strict) le
+        # refuserait sinon.
         xff = request.headers.get("x-forwarded-for")
         if xff:
-            return xff.split(",")[0].strip()
-        return request.client.host if request.client else "unknown"
+            return str(xff).split(",")[0].strip()
+        client = request.client
+        return str(client.host) if client is not None else "unknown"
 
     @app.get("/health")
     def health() -> dict[str, object]:
