@@ -25,7 +25,7 @@ FIXTURES = ROOT / "tests" / "fixtures"
 ROUTER_MAP = FIXTURES / "router_map.csv"
 
 
-def _client() -> TestClient:
+def _client(**overrides) -> TestClient:
     settings = Settings(
         embedding_backend=EmbeddingBackend.HASHING,
         vector_backend=VectorBackend.MEMORY,
@@ -33,6 +33,7 @@ def _client() -> TestClient:
         router_map_path=ROUTER_MAP,
         # Force le Proposer déterministe (offline) quelle que soit la clé du .env local.
         anthropic_api_key=None,
+        **overrides,
     )
     # bronze_dir est une property (data_dir/bronze) : on l'injecte à create_app.
     return TestClient(create_app(settings, bronze_dir=FIXTURES))
@@ -103,3 +104,35 @@ def test_map_invalid_request_422() -> None:
     # Ni code ni libellé -> validation Pydantic -> 422.
     r = _client().post("/map", json={})
     assert r.status_code == 422
+
+
+# --------------------------------------------------------------------------- #
+# G3 — garde de coût (API publique : pas d'auth, mais coût borné)
+# --------------------------------------------------------------------------- #
+def test_rate_limit_returns_429_when_exceeded() -> None:
+    client = _client(api_rate_limit_max=2, api_rate_limit_window_seconds=86400)
+    assert client.post("/map", json={"source_code": "E11.9"}).status_code == 200
+    assert client.post("/map", json={"source_code": "E11.9"}).status_code == 200
+    # 3e appel dans la fenêtre depuis la même IP -> refusé.
+    assert client.post("/map", json={"source_code": "E11.9"}).status_code == 429
+
+
+def test_rate_limit_disabled_when_zero() -> None:
+    client = _client(api_rate_limit_max=0)
+    for _ in range(5):
+        assert client.post("/map", json={"source_code": "E11.9"}).status_code == 200
+
+
+def test_batch_too_large_returns_413() -> None:
+    client = _client(api_max_batch_size=2)
+    r = client.post(
+        "/map/batch",
+        json={"items": [{"source_code": "E11.9"}] * 3, "strategy": "auto"},
+    )
+    assert r.status_code == 413
+
+
+def test_public_access_no_api_key_required() -> None:
+    # Accès public volontaire : aucune clé requise, /map répond 200.
+    r = _client().post("/map", json={"source_code": "E11.9"})
+    assert r.status_code == 200

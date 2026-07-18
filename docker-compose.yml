@@ -32,6 +32,10 @@ services:
       - GOR_VECTOR_BACKEND=qdrant
       - GOR_QDRANT_URL=http://qdrant:6333
       - GOR_ANTHROPIC_API_KEY=${GOR_ANTHROPIC_API_KEY:-}
+      # Garde de coût de la démo publique : 3 mappings/jour/IP (ajustable).
+      - GOR_API_RATE_LIMIT_MAX=${GOR_API_RATE_LIMIT_MAX:-3}
+      - GOR_API_RATE_LIMIT_WINDOW_SECONDS=${GOR_API_RATE_LIMIT_WINDOW_SECONDS:-86400}
+      - GOR_API_MAX_BATCH_SIZE=${GOR_API_MAX_BATCH_SIZE:-50}
     command:
       ["gor", "serve", "--host", "0.0.0.0", "--port", "8000", "--bronze-dir", "tests/fixtures"]
     ports:

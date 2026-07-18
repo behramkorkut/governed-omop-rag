@@ -115,6 +115,19 @@ class Settings(BaseSettings):
     # 0.0 = désactivé (comportement historique : aucune abstention par marge).
     agent_min_margin: float = Field(default=0.0, ge=0.0)
 
+    # --- Garde de coût de l'API (accès PUBLIC volontaire pour la démo : pas
+    # d'authentification, mais on borne le coût/abus). L'auth viendra plus tard. ---
+    # Quota par IP : au plus `max` requêtes par fenêtre glissante de `window`
+    # secondes (0 = désactivé). Défaut volontairement restrictif : 3 par jour
+    # (86400 s) — chaque mapping peut coûter un appel LLM.
+    # NB : compteur en mémoire (par-processus, remis à zéro au redémarrage, non
+    # partagé entre réplicas) ; un vrai quota durable nécessitera un store type
+    # Redis. IP partagée (NAT d'entreprise) = quota partagé entre utilisateurs.
+    api_rate_limit_max: int = Field(default=3, ge=0)
+    api_rate_limit_window_seconds: int = Field(default=86400, ge=1)
+    # Taille maximale d'un lot /map/batch (borne le coût d'un seul appel).
+    api_max_batch_size: int = Field(default=50, ge=1)
+
     @property
     def bronze_dir(self) -> Path:
         """Répertoire des données brutes (couche Bronze)."""
