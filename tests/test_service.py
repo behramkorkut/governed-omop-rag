@@ -12,21 +12,19 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("rank_bm25")
-
-from governed_omop_rag.agents.schemas import ProposerOutput  # noqa: E402
-from governed_omop_rag.config import (  # noqa: E402
+from governed_omop_rag.agents.schemas import ProposerOutput
+from governed_omop_rag.config import (
     EmbeddingBackend,
     Settings,
     VectorBackend,
 )
-from governed_omop_rag.core.models import (  # noqa: E402
+from governed_omop_rag.core.models import (
     ConceptCandidate,
     MappingRequest,
     MappingSource,
     NoMapReason,
 )
-from governed_omop_rag.service import MappingService  # noqa: E402
+from governed_omop_rag.service import MappingService
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

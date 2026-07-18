@@ -5,7 +5,7 @@
 > **supervision humaine** (human-in-the-loop).
 
 [![CI](https://github.com/behramkorkut/governed-omop-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/behramkorkut/governed-omop-rag/actions/workflows/ci.yml)
-![Python](https://img.shields.io/badge/python-3.11-blue)
+![Python](https://img.shields.io/badge/python-3.11%20%C2%B7%203.12%20%C2%B7%203.13-blue)
 ![Types](https://img.shields.io/badge/mypy-strict-blue)
 ![Lint](https://img.shields.io/badge/ruff-clean-black)
 ![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen)
@@ -122,6 +122,25 @@ standard), couplage minimal. Détail de la boucle : [`docs/reinjection.md`](docs
 - **Conformité & souveraineté** : embeddings locaux, Qdrant européen, IA Act,
   human-in-the-loop, données synthétiques.
 - **Produit** : deux portes d'entrée (API REST + UI non-dev), packaging Docker, CI.
+
+## Audit & qualité
+
+Le projet a fait l'objet d'un **audit en deux passes** (revue de code +
+**exécution réelle**, dont tests adversariaux sur chaque garde-fou), suivi de
+corrections vérifiées une à une. 
+
+| Garantie | Vérifiée à l'exécution |
+|---|---|
+| Anti-hallucination **structurel** : un `concept_id` hors candidats est rejeté **dans le code** (sortie fermée), pas seulement dans le prompt | ✅ par test dédié |
+| Abstention « je ne sais pas » **incontournable** : portée par le router, identique quel que soit le point d'entrée (CLI, API, UI) et l'orchestrateur (simple / LangGraph) | ✅ par test dédié |
+| Réponse LLM illisible ou API en panne → dégradation propre (`UNMAPPED` explicite), **un item cassé ne fait jamais échouer un lot** | ✅ par test dédié |
+| Garde de coût API : quota par IP réelle (X-Forwarded-For honoré), fenêtre glissante, batch borné (HTTP 429 / 413) | ✅ par test dédié |
+| **206 tests**, couverture mesurée ≈ 93 %, `mypy --strict`, `ruff` (lint + format) | ✅ CI verte |
+| CI multi-version | ✅ Python **3.11 · 3.12 · 3.13** |
+
+> Limite assumée et documentée : l'API de démo est **publique, sans
+> authentification** (quota en mémoire par IP). Auth par clé + store partagé type
+> Redis = marche suivante pour une mise en production.
 
 ## État des lieux
 
