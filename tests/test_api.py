@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -25,7 +26,7 @@ FIXTURES = ROOT / "tests" / "fixtures"
 ROUTER_MAP = FIXTURES / "router_map.csv"
 
 
-def _client(**overrides) -> TestClient:
+def _client(**overrides: Any) -> TestClient:
     settings = Settings(
         embedding_backend=EmbeddingBackend.HASHING,
         vector_backend=VectorBackend.MEMORY,

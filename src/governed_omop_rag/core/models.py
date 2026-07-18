@@ -35,6 +35,7 @@ class NoMapReason(StrEnum):
     AMBIGU = "ambigu"
     CONFIDENCE_INSUFFISANTE = "confidence_insuffisante"
     AUCUN_CANDIDAT = "aucun_candidat"
+    ERREUR_AGENT = "erreur_agent"  # réponse LLM illisible : dégradation propre
 
 
 class MappingRequest(BaseModel):

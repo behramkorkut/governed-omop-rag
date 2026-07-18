@@ -49,6 +49,16 @@ class _RogueLLM:
         return ProposerOutput(concept_id=999999, justification="inventé")
 
 
+class _BrokenLLM:
+    """LLM qui lève une réponse illisible (JSON cassé / ValueError)."""
+
+    def __init__(self, exc: Exception) -> None:
+        self._exc = exc
+
+    def propose(self, query: str, candidates: Sequence[ConceptCandidate]) -> ProposerOutput:
+        raise self._exc
+
+
 def test_langgraph_maps_on_pass() -> None:
     sugg = _lg().run(MappingRequest(source_label="diabète"), [_cand(201826, 0.8)])
     assert sugg.source is MappingSource.RAG
@@ -81,6 +91,19 @@ def test_langgraph_rejects_hallucination() -> None:
     sugg = agent.run(MappingRequest(source_label="x"), [_cand(10), _cand(20)])
     assert sugg.source is MappingSource.UNMAPPED
     assert sugg.no_map_reason is NoMapReason.HORS_VOCABULAIRE
+
+
+def test_langgraph_agent_error_on_unreadable_llm() -> None:
+    """G2 : une réponse LLM illisible (JSONDecodeError, sous-classe de ValueError)
+    dégrade proprement en UNMAPPED/ERREUR_AGENT — jamais d'exception propagée."""
+    import json
+
+    exc = json.JSONDecodeError("Expecting value", "garbage{{{", 0)
+    agent = LangGraphMappingAgent(Proposer(_BrokenLLM(exc)), Verifier())
+    sugg = agent.run(MappingRequest(source_label="x"), [_cand(1, 0.9)])
+    assert sugg.source is MappingSource.UNMAPPED
+    assert sugg.no_map_reason is NoMapReason.ERREUR_AGENT
+    assert sugg.target_concept_id == UNMAPPED_CONCEPT_ID
 
 
 @pytest.mark.parametrize(

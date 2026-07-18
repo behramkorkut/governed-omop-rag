@@ -39,6 +39,32 @@ def _cand(
     )
 
 
+class _BrokenLLM:
+    """Double du LLM qui renvoie une réponse illisible (JSON cassé simulé)."""
+
+    def __init__(self, exc: Exception) -> None:
+        self._exc = exc
+
+    def propose(self, query: str, candidates: Sequence[ConceptCandidate]) -> ProposerOutput:
+        raise self._exc
+
+
+# --------------------------------------------------------------------------- #
+# G2 — une réponse LLM illisible dégrade PROPREMENT (UNMAPPED/ERREUR_AGENT),
+# elle ne fait pas planter le run (ni, en lot, tout le batch).
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize(
+    "exc",
+    [ValueError("concept_id absent"), KeyError("concept_id"), TypeError("bad type")],
+)
+def test_mapping_agent_degrades_on_unreadable_llm(exc: Exception) -> None:
+    agent = MappingAgent(Proposer(_BrokenLLM(exc)), Verifier())
+    sugg = agent.run(MappingRequest(source_label="x"), [_cand(1)])
+    assert sugg.source is MappingSource.UNMAPPED
+    assert sugg.no_map_reason is NoMapReason.ERREUR_AGENT
+    assert sugg.target_concept_id == UNMAPPED_CONCEPT_ID
+
+
 # --------------------------------------------------------------------------- #
 # Vérificateur
 # --------------------------------------------------------------------------- #

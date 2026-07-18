@@ -19,7 +19,12 @@ from governed_omop_rag.agents.orchestrator import MappingAgent
 from governed_omop_rag.agents.proposer import Proposer
 from governed_omop_rag.agents.verifier import Verifier
 from governed_omop_rag.config import Settings, get_settings
-from governed_omop_rag.core.models import MappingRequest, MappingSuggestion
+from governed_omop_rag.core.models import (
+    MappingRequest,
+    MappingSource,
+    MappingSuggestion,
+    NoMapReason,
+)
 from governed_omop_rag.medallion.db import connect
 from governed_omop_rag.medallion.gold import fetch_gold
 from governed_omop_rag.medallion.pipeline import build_corpus
@@ -65,13 +70,27 @@ class MappingService:
         retriever = build_retriever(retriever_kind, gold, embedder, store)
         official_map = OfficialMap.from_csv(s.router_map_path)
         self._llm = build_proposer_llm(s)
-        agent = MappingAgent(Proposer(self._llm), Verifier(), min_margin=s.agent_min_margin)
+        # L'abstention est portée par le ROUTER (min_margin), pas par l'agent, pour
+        # couvrir tout orchestrateur et tout point d'entrée (audit G1).
+        agent = MappingAgent(Proposer(self._llm), Verifier())
 
         self._deterministic = DeterministicRouter(official_map)
-        self._auto = HybridRouter(official_map, retriever, s.confidence_threshold, s.top_k, agent)
+        self._auto = HybridRouter(
+            official_map,
+            retriever,
+            s.confidence_threshold,
+            s.top_k,
+            agent,
+            min_margin=s.agent_min_margin,
+        )
         # Map officielle vide -> le déterministe échoue toujours -> tout part au RAG.
         self._full_rag = HybridRouter(
-            OfficialMap({}), retriever, s.confidence_threshold, s.top_k, agent
+            OfficialMap({}),
+            retriever,
+            s.confidence_threshold,
+            s.top_k,
+            agent,
+            min_margin=s.agent_min_margin,
         )
 
     def route(
@@ -89,8 +108,26 @@ class MappingService:
         requests: Sequence[MappingRequest],
         strategy: MapStrategy = MapStrategy.AUTO,
     ) -> list[MappingSuggestion]:
-        """Route un lot d'entrées."""
-        return [self.route(r, strategy) for r in requests]
+        """Route un lot d'entrées, chaque item ISOLÉ des autres.
+
+        Une exception non-parsing (API LLM en panne après retries, Qdrant down…)
+        sur UN item ne doit pas faire échouer tout le lot : on la capture et on
+        rend cet item `UNMAPPED/ERREUR_AGENT`, puis on continue (fin de G2 —
+        les erreurs de parsing sont déjà dégradées en amont par l'orchestrateur)."""
+        results: list[MappingSuggestion] = []
+        for r in requests:
+            try:
+                results.append(self.route(r, strategy))
+            except Exception:  # noqa: BLE001 — dégradation propre, item isolé
+                results.append(
+                    MappingSuggestion(
+                        request=r,
+                        source=MappingSource.UNMAPPED,
+                        no_map_reason=NoMapReason.ERREUR_AGENT,
+                        justification="Échec de l'agent sur cet item (isolé du lot).",
+                    )
+                )
+        return results
 
     def token_usage(self) -> tuple[int, int]:
         """Tokens LLM cumulés (input, output) — 0 avec le Proposer hors-ligne."""

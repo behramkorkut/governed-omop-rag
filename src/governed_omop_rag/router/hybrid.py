@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from governed_omop_rag.agents.orchestrator import Agent
 from governed_omop_rag.core.models import (
+    ConceptCandidate,
     MappingRequest,
     MappingSource,
     MappingSuggestion,
@@ -49,6 +50,7 @@ class HybridRouter:
         confidence_threshold: float = 0.5,
         top_k: int = 10,
         agent: Agent | None = None,
+        min_margin: float = 0.0,
     ) -> None:
         self._deterministic = DeterministicRouter(official_map)
         self.retriever = retriever
@@ -57,6 +59,18 @@ class HybridRouter:
         # Si fourni, l'agent (Proposer -> Vérificateur, boucle bornée) décide sur
         # le résidu à la place du simple seuil de confiance.
         self.agent = agent
+        # Porte d'abstention AU NIVEAU DU ROUTER (et non de l'agent) : ainsi elle
+        # s'applique quel que soit l'orchestrateur (MappingAgent OU LangGraph) et
+        # quel que soit le point d'entrée (CLI, API, UI). Une garantie de sécurité
+        # ne doit pas dépendre du chemin d'appel (audit G1).
+        self.min_margin = min_margin
+
+    def _is_ambiguous(self, candidates: list[ConceptCandidate]) -> bool:
+        """True si la marge top-1/top-2 est sous le seuil (retrieval indécis)."""
+        if self.min_margin <= 0.0 or len(candidates) < 2:
+            return False
+        scores = sorted((c.score for c in candidates), reverse=True)
+        return (scores[0] - scores[1]) < self.min_margin
 
     def route(self, request: MappingRequest) -> MappingSuggestion:
         # 1. Déterministe d'abord (uniquement si un code est fourni).
@@ -71,6 +85,21 @@ class HybridRouter:
 
         # 2a. Si un agent gouverné est branché, il décide (avec garde-fous).
         if self.agent is not None:
+            # Garde-fou d'abstention appliqué AVANT l'agent : retrieval trop
+            # ambigu -> on n'appelle même pas le LLM (coût borné) et on renvoie
+            # « je ne sais pas » au steward, indépendamment de l'orchestrateur.
+            if self._is_ambiguous(candidates):
+                return MappingSuggestion(
+                    request=request,
+                    candidates=candidates,
+                    confidence=candidates[0].score,
+                    source=MappingSource.UNMAPPED,
+                    no_map_reason=NoMapReason.CONFIDENCE_INSUFFISANTE,
+                    justification=(
+                        "Retrieval ambigu (marge top-1/top-2 sous le seuil) "
+                        "— validation humaine requise."
+                    ),
+                )
             return self.agent.run(request, candidates)
 
         # 2b. Sinon, décision par simple seuil de confiance.

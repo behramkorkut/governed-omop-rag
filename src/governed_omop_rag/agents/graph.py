@@ -11,6 +11,7 @@ l'installation/CI par défaut. ``LangGraphMappingAgent`` satisfait le protocole
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from typing import Any, TypedDict
 
@@ -62,7 +63,12 @@ def build_mapping_graph(
         try:
             out = proposer.propose(state["query"], state["candidates"], excluded)
         except ClosedOutputViolation:
-            return {"outcome": "hallucinated", "attempts_left": attempts_left - 1}
+            # `outcome` posé -> le graphe termine : pas de décrément (mort) ici.
+            return {"outcome": "hallucinated"}
+        except (json.JSONDecodeError, KeyError, ValueError, TypeError):
+            # Réponse LLM illisible : dégradation propre (pas de crash) — cohérent
+            # avec MappingAgent (G2). Terminal aussi : pas de décrément.
+            return {"outcome": "agent_error"}
         assert out is not None
         return {
             "chosen_id": out.concept_id,
@@ -155,6 +161,14 @@ class LangGraphMappingAgent:
                 source=MappingSource.UNMAPPED,
                 no_map_reason=NoMapReason.HORS_VOCABULAIRE,
                 justification=JUSTIFICATION_HALLUCINATION,
+            )
+        if outcome == "agent_error":
+            return MappingSuggestion(
+                request=request,
+                candidates=candidates,
+                source=MappingSource.UNMAPPED,
+                no_map_reason=NoMapReason.ERREUR_AGENT,
+                justification="Réponse de l'agent illisible (dégradation propre).",
             )
         return MappingSuggestion(
             request=request,

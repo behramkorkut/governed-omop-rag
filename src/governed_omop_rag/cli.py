@@ -333,6 +333,7 @@ def map_cmd(
         confidence_threshold=settings.confidence_threshold,
         top_k=top_k,
         agent=mapping_agent,
+        min_margin=settings.agent_min_margin,
     )
     request = MappingRequest(
         source_code=source_code,

@@ -14,6 +14,7 @@ Flux :
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from typing import Protocol, runtime_checkable
 
@@ -43,7 +44,16 @@ class Agent(Protocol):
 
 
 class MappingAgent:
-    """Coordonne Proposer et Vérificateur avec une boucle de correction bornée."""
+    """Coordonne Proposer et Vérificateur avec une boucle de correction bornée.
+
+    Note sur `min_margin` (abstention par marge de retrieval) : depuis G1, la
+    porte d'abstention PRIMAIRE est portée par le `HybridRouter` (elle s'applique
+    quel que soit l'orchestrateur et n'appelle même pas le LLM). Le `min_margin`
+    conservé ici est une **défense en profondeur** : par défaut désactivé (0.0),
+    il ne s'active que si un appelant construit directement un `MappingAgent` avec
+    un seuil. Ce n'est donc pas une seconde porte concurrente du router en usage
+    normal ; le router reste la source de vérité.
+    """
 
     def __init__(
         self,
@@ -59,8 +69,7 @@ class MappingAgent:
         self.proposer = proposer
         self.verifier = verifier
         self.max_attempts = max_attempts
-        # Seuil d'abstention : marge de retrieval (top-1 − top-2) en deçà de laquelle
-        # l'entrée est jugée trop ambiguë pour être mappée automatiquement.
+        # Défense en profondeur (cf. docstring) — la porte primaire est le router.
         self.min_margin = min_margin
 
     def _is_ambiguous(self, candidates: Sequence[ConceptCandidate]) -> bool:
@@ -115,6 +124,17 @@ class MappingAgent:
                     source=MappingSource.UNMAPPED,
                     no_map_reason=NoMapReason.HORS_VOCABULAIRE,
                     justification="Proposition hors-vocabulaire rejetée (sortie fermée).",
+                )
+            except (json.JSONDecodeError, KeyError, ValueError, TypeError) as exc:
+                # Réponse LLM illisible (JSON cassé, concept_id absent/non entier…) :
+                # on dégrade PROPREMENT vers « non mappé » au lieu de laisser
+                # l'exception faire planter le run (et, en lot, tout le batch) (G2).
+                return MappingSuggestion(
+                    request=request,
+                    candidates=candidates,
+                    source=MappingSource.UNMAPPED,
+                    no_map_reason=NoMapReason.ERREUR_AGENT,
+                    justification=f"Réponse de l'agent illisible ({type(exc).__name__}).",
                 )
             if proposal is None:
                 break

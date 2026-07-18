@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,7 @@ from governed_omop_rag.core.models import (
     ConceptCandidate,
     MappingRequest,
     MappingSource,
+    MappingSuggestion,
     NoMapReason,
 )
 from governed_omop_rag.medallion.db import connect
@@ -175,3 +177,47 @@ def test_router_with_agent_rejects_non_standard() -> None:
     sugg = router.route(MappingRequest(source_label="x"))
     assert sugg.source is MappingSource.UNMAPPED
     assert sugg.no_map_reason is NoMapReason.CONFIDENCE_INSUFFISANTE
+
+
+# --------------------------------------------------------------------------- #
+# G1 — l'abstention est portée par le ROUTER : elle s'applique quel que soit
+# l'agent (elle n'appelle même pas l'agent), donc aucun point d'entrée ni
+# orchestrateur ne peut la contourner.
+# --------------------------------------------------------------------------- #
+class _MapEverythingAgent:
+    """Agent factice qui mappe TOUJOURS le 1er candidat (aucune abstention)."""
+
+    def run(
+        self,
+        request: MappingRequest,
+        candidates: Sequence[ConceptCandidate],
+        expected_domain: str | None = None,
+    ) -> MappingSuggestion:
+        c = candidates[0]
+        return MappingSuggestion(
+            request=request,
+            target_concept_id=c.concept_id,
+            candidates=list(candidates),
+            confidence=c.score,
+            source=MappingSource.RAG,
+            justification="stub",
+        )
+
+
+def test_router_abstains_before_agent_on_ambiguous_retrieval() -> None:
+    # Deux candidats quasi ex aequo (marge 0.02) < seuil 0.5 : le router s'abstient
+    # AVANT d'appeler l'agent — même un agent « mappe-tout » ne peut pas passer.
+    stub = StubRetriever([_cand(1, 0.81), _cand(2, 0.79)])
+    router = HybridRouter(OfficialMap({}), stub, agent=_MapEverythingAgent(), min_margin=0.5)
+    sugg = router.route(MappingRequest(source_label="cas ambigu"))
+    assert sugg.source is MappingSource.UNMAPPED
+    assert sugg.no_map_reason is NoMapReason.CONFIDENCE_INSUFFISANTE
+
+
+def test_router_maps_when_margin_is_wide_enough() -> None:
+    # Marge large (0.6) > seuil : l'agent décide normalement.
+    stub = StubRetriever([_cand(1, 0.9), _cand(2, 0.3)])
+    router = HybridRouter(OfficialMap({}), stub, agent=_MapEverythingAgent(), min_margin=0.5)
+    sugg = router.route(MappingRequest(source_label="cas net"))
+    assert sugg.source is MappingSource.RAG
+    assert sugg.target_concept_id == 1

@@ -40,7 +40,8 @@ class _RateLimiter:
 
     Limites assumées : compteur EN MÉMOIRE (par-processus, remis à zéro au
     redémarrage, non partagé entre réplicas). Un quota durable nécessiterait un
-    store partagé (Redis). Une IP partagée (NAT) partage donc son quota.
+    store partagé (Redis). L'identification se fait par IP réelle (X-Forwarded-For
+    honoré derrière un reverse-proxy) ; une IP partagée (NAT) partage son quota.
     """
 
     def __init__(self, max_requests: int, window_seconds: int) -> None:
@@ -48,13 +49,24 @@ class _RateLimiter:
         self.window_seconds = window_seconds
         self._hits: dict[str, deque[float]] = {}
 
+    def _purge(self, cutoff: float) -> None:
+        """Retire les entrées expirées et les buckets vides — évite la fuite
+        mémoire lente (une IP inactive ne doit pas rester en mémoire pour
+        toujours)."""
+        for ip in list(self._hits):
+            bucket = self._hits[ip]
+            while bucket and bucket[0] < cutoff:
+                bucket.popleft()
+            if not bucket:
+                del self._hits[ip]
+
     def check(self, client: str) -> None:
         if self.max_requests <= 0:
             return  # désactivé
         now = time.time()
+        # Purge globale à chaque appel : borne la taille du dict dans le temps.
+        self._purge(now - self.window_seconds)
         bucket = self._hits.setdefault(client, deque())
-        while bucket and bucket[0] < now - self.window_seconds:
-            bucket.popleft()
         if len(bucket) >= self.max_requests:
             raise HTTPException(
                 status_code=429,
@@ -88,6 +100,13 @@ def create_app(settings: Settings | None = None, bronze_dir: Path | None = None)
     app.state.service = service
 
     def _client(request: Request) -> str:
+        # Derrière un reverse-proxy (docker-compose, nginx), request.client.host
+        # est l'IP du proxy → sans ceci, tous les utilisateurs partageraient un
+        # seul quota. On prend la 1re IP de X-Forwarded-For (l'IP réelle du
+        # client) quand l'en-tête est présent.
+        xff = request.headers.get("x-forwarded-for")
+        if xff:
+            return xff.split(",")[0].strip()
         return request.client.host if request.client else "unknown"
 
     @app.get("/health")
