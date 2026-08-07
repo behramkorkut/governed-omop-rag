@@ -142,6 +142,87 @@ corrections vérifiées une à une.
 > authentification** (quota en mémoire par IP). Auth par clé + store partagé type
 > Redis = marche suivante pour une mise en production.
 
+## Observabilité : ce que coûte et ce que dure un mapping
+
+L'architecture **borne le coût par conception** (router déterministe d'abord, LLM sur le
+seul résidu, cache de retrieval). Restait une faiblesse : cette borne était une
+*assertion d'architecture*, pas une mesure. Le tracing **Langfuse** la rend chiffrable.
+
+### Ce qui est tracé, et pourquoi il a fallu deux mécanismes
+
+| Mécanisme | Ce qu'il capture |
+|---|---|
+| `CallbackHandler` LangChain sur le `StateGraph` | structure du graphe, nœuds `propose` / `verify`, entrées-sorties, latence par nœud |
+| Span `generation` explicite autour de l'appel Anthropic | modèle, prompt, réponse, **tokens et coût** |
+
+Le second n'est pas redondant. Le Proposer appelle **directement** le SDK Anthropic
+(`client.messages.create`), pas un modèle LangChain : le `CallbackHandler` ne le voit
+donc pas. Sans ce span, les traces montrent le graphe mais **aucune donnée de coût** —
+exactement ce qu'on cherchait à mesurer.
+
+Les métadonnées de trace (`source_code`, `n_candidates`, `max_attempts`) rendent les
+exécutions filtrables, notamment pour isoler les cas où le Vérificateur a rejeté et
+forcé une reprise.
+
+### Résultats mesurés (échantillon de 20 cas, `claude-sonnet-5`, 7 août 2026)
+
+Gold set ATIH, résidu held-out, échantillon aléatoire **déterministe** (`--limit 20 --seed 42`) :
+la mesure est rejouable à l'identique et comparable entre deux versions du pipeline.
+
+| Indicateur | Valeur |
+|---|---|
+| Coût total (20 mappings) | **0,0749 $** |
+| Coût moyen par mapping | **0,00374 $** |
+| Coût extrapolé pour 1 000 mappings | ≈ **3,74 $** |
+| Latence de l'appel LLM — p50 / p95 | **3,09 s** / **3,47 s** |
+| Latence bout en bout | 3,59 s par entrée |
+| Part de la latence imputable au LLM | **85 %** (retrieval + embedding : 15 %) |
+| Tokens par entrée (entrée / sortie) | 1 534 / 68 — ratio **22,7×** |
+| Appels LLM par cas | **1,00** (aucune reprise observée) |
+
+Deux enseignements exploitables. Le **ratio entrée/sortie de 22,7×** montre que le coût
+est dominé par le contexte envoyé (10 candidats détaillés) et non par la réponse :
+réduire `top_k` ou élaguer les synonymes est le levier d'optimisation, pas raccourcir la
+sortie. Et puisque **85 % de la latence est l'appel LLM**, optimiser le retrieval ne
+rapporterait presque rien.
+
+### Limites assumées de cette mesure
+
+> **Cet échantillon ne valide pas la borne « un tiers traité gratuitement ».**
+> Les 20 cas ont tous appelé le LLM — c'est attendu : le gold set ATIH **est** le résidu
+> held-out, il ne contient par construction que des codes non couverts par l'alignement
+> officiel. Le 31,8 % de résolution déterministe provient de l'analyse des 42 886 codes
+> CIM-10 FR, une mesure distincte. Les deux ne doivent pas être confondues.
+
+> **Le Top-1 de cet échantillon (0,600) ne remplace pas celui du gold set complet (0,650).**
+> À n=20, l'intervalle de confiance à 95 % est [0,387 ; 0,781] — trop large pour conclure.
+> Il recouvre celui des 80 cas ([0,541 ; 0,745]), donc les deux sont compatibles, mais
+> **la performance se cite sur les 80 cas** ; l'échantillon de 20 sert au coût et à la latence,
+> où il suffit largement.
+
+> **Aucun rejet observé n'est pas un taux de rejet de 0 %.** Le Vérificateur n'a mordu sur
+> aucun des 20 cas — cohérent avec une sortie fermée qui rend l'hallucination impossible
+> en amont. C'est une absence d'observation, pas une statistique.
+
+### Reproduire la mesure
+
+```bash
+uv sync --group dev --extra api --extra ui --extra agents --extra retrieval --extra observability
+docker compose up -d qdrant
+
+GOR_QDRANT_COLLECTION=ohdsi_biolord uv run gor eval-map \
+  --gold-path data/eval/gold_set_atih.csv \
+  --bronze-dir <repertoire_export_athena> \
+  --domain Condition \
+  --retriever hybrid --reuse-index \
+  --limit 20
+```
+
+Le tracing est **optionnel et désactivé par défaut** (`GOR_LANGFUSE_ENABLED=false`) : sans
+clés ni extra `observability`, il dégrade en no-op sans jamais faire échouer un mapping.
+La suite de tests le neutralise explicitement (`tests/conftest.py`) — sinon les cas de
+rejet simulés par `test_graph.py` pollueraient les mesures réelles.
+
 ## État des lieux
 
 | Domaine | Statut |

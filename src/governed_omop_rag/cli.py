@@ -470,6 +470,16 @@ def eval_map(
             "sans coût LLM.",
         ),
     ] = False,
+    limit: Annotated[
+        int | None,
+        typer.Option(
+            help="N'évalue qu'un échantillon de N cas (borne le coût LLM). "
+            "Échantillon aléatoire mais DÉTERMINISTE (voir --seed).",
+        ),
+    ] = None,
+    seed: Annotated[
+        int, typer.Option(help="Graine de l'échantillonnage : même graine, même sous-ensemble.")
+    ] = 42,
 ) -> None:
     """Évalue le MAPPING final (Top-1, couverture, précision) via le pipeline complet."""
     from governed_omop_rag.config import EmbeddingBackend, VectorBackend
@@ -504,11 +514,30 @@ def eval_map(
         return service.route(request, strat)
 
     gold = load_gold_set(gold_path or settings.gold_set_path)
+    total_gold = len(gold)
+    if limit is not None and limit < total_gold:
+        # Échantillon aléatoire mais reproductible : une mesure doit pouvoir être
+        # rejouée à l'identique (et comparée entre deux versions du pipeline).
+        import random
+
+        gold = random.Random(seed).sample(gold, limit)
+
     report = evaluate_mapping(gold, route, token_usage=service.token_usage)
+    echantillon = (
+        f" | échantillon : {len(gold)}/{total_gold} (seed {seed})"
+        if len(gold) < total_gold
+        else f" | cas : {total_gold}"
+    )
     typer.echo(
-        f"stratégie : {strategy} | retriever : {retriever} | indexés : {service.concepts_indexed}"
+        f"stratégie : {strategy} | retriever : {retriever} "
+        f"| indexés : {service.concepts_indexed}{echantillon}"
     )
     typer.echo(report.as_table())
+
+    # Envoi asynchrone des traces : un processus CLI peut se terminer avant.
+    from governed_omop_rag.observability import flush as _flush_traces
+
+    _flush_traces()
 
 
 @app.command()
