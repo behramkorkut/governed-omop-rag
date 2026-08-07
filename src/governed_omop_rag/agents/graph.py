@@ -133,9 +133,43 @@ class LangGraphMappingAgent:
                 "candidates": candidates,
                 "excluded": [],
                 "attempts_left": self.max_attempts,
-            }
+            },
+            config=self._trace_config(request, candidates, expected_domain),
         )
         return self._to_suggestion(request, candidates, final)
+
+    def _trace_config(
+        self,
+        request: MappingRequest,
+        candidates: list[ConceptCandidate],
+        expected_domain: str | None,
+    ) -> dict[str, Any]:
+        """Config LangGraph portant le callback Langfuse (ou vide si tracing off).
+
+        Les métadonnées rendent les traces **filtrables** dans Langfuse : on peut
+        isoler les mappings où le Vérificateur a rejeté et forcé une reprise, et
+        donc mesurer le taux de rejet réel de la boucle Proposeur/Vérificateur.
+
+        Aucun identifiant patient ici : seuls le code source, son libellé et des
+        compteurs transitent (cf. gouvernance §4.3).
+        """
+        from governed_omop_rag.observability import get_langfuse_callback
+
+        handler = get_langfuse_callback()
+        if handler is None:
+            return {}
+        return {
+            "callbacks": [handler],
+            "run_name": "mapping_agent",
+            "metadata": {
+                "source_code": request.source_code,
+                "source_label": request.source_label,
+                "n_candidates": len(candidates),
+                "max_attempts": self.max_attempts,
+                "expected_domain": expected_domain,
+            },
+            "tags": ["governed-omop-rag", "langgraph", "proposer-verifier"],
+        }
 
     def _to_suggestion(
         self,

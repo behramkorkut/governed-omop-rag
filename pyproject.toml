@@ -44,6 +44,11 @@ api = [
 ui = ["streamlit>=1.36", "pandas>=2.2", "openpyxl>=3.1"]
 # Phase 5 : évaluation.
 eval = ["scikit-learn>=1.5", "pandas>=2.2"]
+# Observabilité LLM : traces, coûts et latences de la boucle d'agents (Langfuse).
+# Optionnel — sans cet extra, le tracing dégrade en no-op sans erreur.
+# `langchain` (méta-paquet) est requis par langfuse.langchain.CallbackHandler, qui
+# lit `langchain.__version__` pour choisir son API avant d'importer langchain_core.
+observability = ["langfuse>=4.0", "langchain>=0.3"]
 
 [project.scripts]
 gor = "governed_omop_rag.cli:app"

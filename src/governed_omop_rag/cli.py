@@ -364,6 +364,12 @@ def map_cmd(
         if callable(close):
             close()
 
+    # Le SDK Langfuse envoie en asynchrone : un processus CLI court peut se terminer
+    # avant l'envoi. No-op si le tracing est inactif.
+    from governed_omop_rag.observability import flush as _flush_traces
+
+    _flush_traces()
+
 
 @app.command()
 def eval(

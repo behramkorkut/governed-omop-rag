@@ -128,6 +128,18 @@ class Settings(BaseSettings):
     # Taille maximale d'un lot /map/batch (borne le coût d'un seul appel).
     api_max_batch_size: int = Field(default=50, ge=1)
 
+    # --- Observabilité LLM (Langfuse) ---
+    # Rend MESURABLE la borne de coût de l'architecture : coût par mapping, part
+    # des requêtes atteignant réellement le LLM, surcoût des reprises quand le
+    # Vérificateur rejette. Strictement optionnel : désactivé -> aucun effet, et
+    # aucune erreur de tracing ne peut faire échouer un mapping.
+    # Défaut `false` : CI et tests restent hors-ligne et sans secrets.
+    langfuse_enabled: bool = False
+    langfuse_public_key: SecretStr | None = None
+    langfuse_secret_key: SecretStr | None = None
+    # Région Europe par défaut (souveraineté des données, cohérent avec le projet).
+    langfuse_host: str = "https://cloud.langfuse.com"
+
     @property
     def bronze_dir(self) -> Path:
         """Répertoire des données brutes (couche Bronze)."""

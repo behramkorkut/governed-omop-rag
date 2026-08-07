@@ -101,24 +101,48 @@ class ClaudeProposerLLM:  # pragma: no cover - nécessite une clé API + réseau
         return "\n".join(lines)
 
     def propose(self, query: str, candidates: Sequence[ConceptCandidate]) -> ProposerOutput:
+        from governed_omop_rag.observability import observe_generation
+
         client = self._get_client()
         user = f"Libellé source : {query}\n\nCandidats :\n{self._render_candidates(candidates)}"
-        message = client.messages.create(
+        # Span `generation` explicite : l'appel passe par le SDK Anthropic, donc le
+        # CallbackHandler LangChain ne le voit pas. Sans ce span, Langfuse n'a ni
+        # tokens ni coût — or c'est la mesure qui justifie l'instrumentation.
+        with observe_generation(
+            name="proposer_claude",
             model=self.model,
-            max_tokens=1024,
-            system=_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user}],
-        )
-        usage = getattr(message, "usage", None)
-        if usage is not None:
-            self.input_tokens += int(getattr(usage, "input_tokens", 0) or 0)
-            self.output_tokens += int(getattr(usage, "output_tokens", 0) or 0)
+            input={"system": _SYSTEM_PROMPT, "user": user},
+            metadata={"n_candidates": len(candidates), "max_tokens": 1024},
+        ) as generation:
+            message = client.messages.create(
+                model=self.model,
+                max_tokens=1024,
+                system=_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": user}],
+            )
+            usage = getattr(message, "usage", None)
+            if usage is not None:
+                in_tokens = int(getattr(usage, "input_tokens", 0) or 0)
+                out_tokens = int(getattr(usage, "output_tokens", 0) or 0)
+                self.input_tokens += in_tokens
+                self.output_tokens += out_tokens
+                if generation is not None:
+                    generation.update(
+                        usage_details={
+                            "input": in_tokens,
+                            "output": out_tokens,
+                            "total": in_tokens + out_tokens,
+                        }
+                    )
 
-        data = json.loads(self._extract_json(message.content))
-        return ProposerOutput(
-            concept_id=int(data["concept_id"]),
-            justification=str(data.get("justification", "")),
-        )
+            data = json.loads(self._extract_json(message.content))
+            output = ProposerOutput(
+                concept_id=int(data["concept_id"]),
+                justification=str(data.get("justification", "")),
+            )
+            if generation is not None:
+                generation.update(output=output.model_dump())
+            return output
 
     @staticmethod
     def _extract_json(content: Sequence[object]) -> str:
