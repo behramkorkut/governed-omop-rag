@@ -41,7 +41,6 @@ def _tracing_desactive() -> Iterator[None]:
     tracing.get_langfuse_callback.cache_clear()
 
     assert not tracing.langfuse_enabled(), (
-        "Le tracing Langfuse doit être désactivé pendant les tests "
-        "(vérifier GOR_LANGFUSE_ENABLED)."
+        "Le tracing Langfuse doit être désactivé pendant les tests (vérifier GOR_LANGFUSE_ENABLED)."
     )
     yield

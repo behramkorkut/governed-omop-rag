@@ -36,9 +36,7 @@ def langfuse_enabled() -> bool:
     """Vrai si le tracing est activé ET correctement configuré."""
     settings = get_settings()
     return bool(
-        settings.langfuse_enabled
-        and settings.langfuse_public_key
-        and settings.langfuse_secret_key
+        settings.langfuse_enabled and settings.langfuse_public_key and settings.langfuse_secret_key
     )
 
 
