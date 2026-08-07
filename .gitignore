@@ -45,3 +45,9 @@ CONTEXT.md
 #bundle athena 
 bundle/
 bundle/*
+
+# Dossiers d'audit locaux : notes et scripts de verification hors perimetre du depot.
+# Ignores par git ET par ruff (qui respecte .gitignore) -> `ruff check .` devient
+# identique en local et en CI.
+audit fable governed-omop-rag/
+audit_claude_governed_omop_rag.md

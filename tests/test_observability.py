@@ -28,14 +28,20 @@ def _clear_caches() -> Any:
 
 
 def _settings(**kwargs: Any) -> Settings:
-    """Settings isolés de l'environnement réel (pas de lecture du .env)."""
+    """Settings isolés pour les tests.
+
+    Les trois champs Langfuse sont passés explicitement : les arguments
+    d'initialisation priment sur les variables d'environnement et sur le ``.env``
+    du développeur. Inutile donc de désactiver le fichier ``.env`` (ce que
+    ``_env_file`` ferait, au prix d'un argument absent de la signature typée).
+    """
     base: dict[str, Any] = {
         "langfuse_enabled": False,
         "langfuse_public_key": None,
         "langfuse_secret_key": None,
     }
     base.update(kwargs)
-    return Settings(_env_file=None, **base)
+    return Settings(**base)
 
 
 def test_desactive_par_defaut(monkeypatch: pytest.MonkeyPatch) -> None:
