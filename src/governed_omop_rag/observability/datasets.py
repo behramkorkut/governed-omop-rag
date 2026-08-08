@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from governed_omop_rag.core.logging import get_logger
 
@@ -116,13 +116,21 @@ def push_gold_set(
 # --------------------------------------------------------------------------- #
 
 
+ScoreType = Literal["NUMERIC", "CATEGORICAL", "BOOLEAN"]
+
+
 @dataclass(frozen=True)
 class Score:
-    """Un score, indépendant du SDK — cœur testable sans dépendance."""
+    """Un score, indépendant du SDK — cœur testable sans dépendance.
+
+    ``data_type`` reprend l'ensemble fermé attendu par Langfuse : le typer ainsi (plutôt
+    qu'en ``str``) évite un ``type: ignore`` à la conversion — lequel serait « inutile »
+    dans une CI sans le SDK, où le type devient ``Any``.
+    """
 
     name: str
     value: float | str
-    data_type: str
+    data_type: ScoreType
     comment: str | None = None
 
 
@@ -166,7 +174,7 @@ def evaluate_top1(
         Evaluation(
             name=s.name,
             value=s.value,
-            data_type=s.data_type,  # type: ignore[arg-type]
+            data_type=s.data_type,
             comment=s.comment,
         )
         for s in score_mapping(output, expected_output)

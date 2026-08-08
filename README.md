@@ -135,7 +135,7 @@ corrections vérifiées une à une.
 | Abstention « je ne sais pas » **incontournable** : portée par le router, identique quel que soit le point d'entrée (CLI, API, UI) et l'orchestrateur (simple / LangGraph) | ✅ par test dédié |
 | Réponse LLM illisible ou API en panne → dégradation propre (`UNMAPPED` explicite), **un item cassé ne fait jamais échouer un lot** | ✅ par test dédié |
 | Garde de coût API : quota par IP réelle (X-Forwarded-For honoré), fenêtre glissante, batch borné (HTTP 429 / 413) | ✅ par test dédié |
-| **206 tests**, couverture mesurée ≈ 93 %, `mypy --strict`, `ruff` (lint + format) | ✅ CI verte |
+| **233 tests**, couverture mesurée ≈ 88 %, `mypy --strict`, `ruff` (lint + format) | ✅ CI verte |
 | CI multi-version | ✅ Python **3.11 · 3.12 · 3.13** |
 
 > Limite assumée et documentée : l'API de démo est **publique, sans
