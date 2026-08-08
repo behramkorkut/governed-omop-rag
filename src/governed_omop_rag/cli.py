@@ -540,6 +540,132 @@ def eval_map(
     _flush_traces()
 
 
+@app.command("dataset-push")
+def dataset_push(
+    gold_path: Annotated[Path | None, typer.Option(help="Gold set CSV (défaut: config).")] = None,
+    dataset_name: Annotated[
+        str | None, typer.Option(help="Nom du dataset Langfuse (défaut: gold-set-atih-conditions).")
+    ] = None,
+    description: Annotated[str | None, typer.Option(help="Description du dataset.")] = None,
+    limit: Annotated[int | None, typer.Option(help="Ne publier que les N premiers items.")] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Valide la transformation sans aucun appel réseau."),
+    ] = False,
+) -> None:
+    """Publie le gold set comme dataset Langfuse (versionné, comparable entre runs).
+
+    Aucun coût LLM : cette commande n'envoie que de la donnée. Les items reçoivent un
+    identifiant dérivé de leur contenu, donc republier met à jour au lieu de dupliquer.
+    """
+    from governed_omop_rag.eval.gold_set import load_gold_set
+    from governed_omop_rag.observability import DEFAULT_DATASET_NAME, push_gold_set
+
+    settings = get_settings()
+    path = gold_path or settings.gold_set_path
+    items = load_gold_set(path)
+    if limit is not None:
+        items = items[:limit]
+
+    try:
+        report = push_gold_set(
+            items,
+            dataset_name=dataset_name or DEFAULT_DATASET_NAME,
+            description=description,
+            source_file=str(path),
+            dry_run=dry_run,
+        )
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(report.as_table())
+
+
+@app.command("dataset-run")
+def dataset_run(
+    dataset_name: Annotated[
+        str | None, typer.Option(help="Nom du dataset Langfuse (défaut: gold-set-atih-conditions).")
+    ] = None,
+    run_name: Annotated[str | None, typer.Option(help="Nom du run (défaut: horodaté).")] = None,
+    bronze_dir: Annotated[
+        Path | None, typer.Option(help="Répertoire OHDSI (défaut: config).")
+    ] = None,
+    strategy: Annotated[str, typer.Option(help="auto | deterministic_only | full_rag.")] = "auto",
+    embedding_backend: Annotated[
+        str | None, typer.Option(help="hashing | sentence_transformers.")
+    ] = None,
+    vector_backend: Annotated[str | None, typer.Option(help="memory | qdrant.")] = None,
+    domain: Annotated[list[str] | None, typer.Option(help="Filtre domain_id (répétable).")] = None,
+    retriever: Annotated[str, typer.Option(help="dense | bm25 | hybrid.")] = "hybrid",
+    reuse_index: Annotated[
+        bool, typer.Option("--reuse-index", help="Réutilise la collection vectorielle remplie.")
+    ] = False,
+    offline: Annotated[
+        bool, typer.Option("--offline", help="Proposer hors-ligne (aucun coût LLM).")
+    ] = False,
+    limit: Annotated[int | None, typer.Option(help="N'évalue que les N premiers items.")] = None,
+    concurrency: Annotated[
+        int,
+        typer.Option(
+            help="Items traités en parallèle. 1 par défaut : borne le coût et évite "
+            "le rate limit (le SDK Langfuse propose 50, bien trop pour des appels LLM).",
+        ),
+    ] = 1,
+) -> None:
+    """Exécute le pipeline sur un dataset Langfuse et enregistre un run évalué.
+
+    Chaque item reçoit trois scores : `top1` (correction), `mapped` (couverture) et
+    `source` (voie de résolution : router déterministe ou RAG). Les runs successifs
+    sont comparables dans l'interface, avec la trace de chaque cas.
+    """
+    from governed_omop_rag.config import EmbeddingBackend, VectorBackend
+    from governed_omop_rag.core.models import MappingRequest, MappingSuggestion
+    from governed_omop_rag.observability import DEFAULT_DATASET_NAME, run_gold_set_experiment
+    from governed_omop_rag.service import MappingService, MapStrategy
+
+    settings = get_settings()
+    overrides: dict[str, object] = {}
+    if embedding_backend:
+        overrides["embedding_backend"] = EmbeddingBackend(embedding_backend)
+    if vector_backend:
+        overrides["vector_backend"] = VectorBackend(vector_backend)
+    if offline:
+        overrides["anthropic_api_key"] = None
+    if overrides:
+        settings = settings.model_copy(update=overrides)
+
+    with _friendly_extras():
+        service = MappingService(
+            settings,
+            bronze_dir,
+            domain or settings.corpus_domains,
+            retriever_kind=retriever,
+            reuse_index=reuse_index,
+        )
+    strat = MapStrategy(strategy)
+
+    def route(request: MappingRequest) -> MappingSuggestion:
+        return service.route(request, strat)
+
+    try:
+        result = run_gold_set_experiment(
+            dataset_name=dataset_name or DEFAULT_DATASET_NAME,
+            route=route,
+            run_name=run_name,
+            limit=limit,
+            concurrency=concurrency,
+        )
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(f"run terminé | indexés : {service.concepts_indexed}")
+    resume = getattr(result, "format", None)
+    if callable(resume):
+        typer.echo(resume())
+
+
 @app.command()
 def serve(
     host: Annotated[str, typer.Option(help="Interface d'écoute.")] = "127.0.0.1",

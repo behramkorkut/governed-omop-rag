@@ -204,6 +204,37 @@ rapporterait presque rien.
 > aucun des 20 cas — cohérent avec une sortie fermée qui rend l'hallucination impossible
 > en amont. C'est une absence d'observation, pas une statistique.
 
+### Gold set publié comme dataset versionné
+
+Le gold set ne vit plus seulement dans un CSV : il est publié comme **dataset Langfuse**,
+auquel des *runs* évalués sont rattachés. Chaque item porte un identifiant **dérivé de son
+contenu**, donc republier mettre à jour les items au lieu de les dupliquer.
+
+```bash
+uv run gor dataset-push --gold-path data/eval/gold_set_atih.csv   # aucun coût LLM
+uv run gor dataset-run  --run-name "baseline-hybrid-claude-sonnet-5"
+```
+
+Chaque item d'un run reçoit trois scores : `top1` (correction), `mapped` (couverture) et
+`source` — catégoriel, il enregistre la **voie de résolution** (router déterministe ou RAG).
+Ce troisième score rend la borne de coût *observable* run après run, au lieu d'être affirmée.
+
+| Run | Items | `top1` | `mapped` |
+|---|---|---|---|
+| `baseline-hybrid-claude-sonnet-5` | 80 | **0,650** | 1,000 |
+
+Ce run **reproduit le Top-1 de 0,650** obtenu par le harnais d'évaluation : les deux chemins
+de mesure convergent. Sa distribution de `source` est ~100 % `rag`, ce qui confirme
+empiriquement la limite énoncée plus haut — le gold set *est* le résidu.
+
+Ce que le dataset apporte que le harnais ne donne pas : l'**historique comparable** entre
+versions du pipeline, et surtout le **drill-down par cas**. Quand le Top-1 baisse, on ne lit
+plus « le score a baissé » mais on ouvre les cas qui ont échoué et on voit, pour chacun, les
+candidats remontés, le prompt envoyé et la réponse du modèle.
+
+> La concurrence des runs est fixée à **1 par défaut** (le SDK propose 50) : des appels LLM
+> parallèles déclencheraient le rate limit et rendraient le coût difficile à borner.
+
 ### Reproduire la mesure
 
 ```bash

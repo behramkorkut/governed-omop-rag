@@ -32,18 +32,30 @@ from governed_omop_rag.core.logging import get_logger
 logger = get_logger(__name__)
 
 
+def langfuse_configured() -> bool:
+    """Vrai si les **clés** sont présentes, indépendamment du tracing.
+
+    Les clés donnent accès à l'API Langfuse (datasets, scores). Le drapeau
+    ``GOR_LANGFUSE_ENABLED``, lui, ne gouverne que l'émission de traces : on peut
+    vouloir publier un dataset sans tracer, et inversement.
+    """
+    settings = get_settings()
+    return bool(settings.langfuse_public_key and settings.langfuse_secret_key)
+
+
 def langfuse_enabled() -> bool:
     """Vrai si le tracing est activé ET correctement configuré."""
-    settings = get_settings()
-    return bool(
-        settings.langfuse_enabled and settings.langfuse_public_key and settings.langfuse_secret_key
-    )
+    return bool(get_settings().langfuse_enabled) and langfuse_configured()
 
 
 @lru_cache(maxsize=1)
-def _init_client() -> Any | None:
-    """Instancie (une seule fois) le client Langfuse global. ``None`` si indisponible."""
-    if not langfuse_enabled():
+def get_client() -> Any | None:
+    """Client Langfuse dès que les clés sont présentes (opérations API).
+
+    Mémoïsé : une seule instance par processus. ``None`` si le SDK manque, si les
+    clés sont absentes, ou si l'initialisation échoue.
+    """
+    if not langfuse_configured():
         return None
 
     settings = get_settings()
@@ -72,6 +84,14 @@ def _init_client() -> Any | None:
 
     logger.info("langfuse_actif", host=settings.langfuse_host, environment=str(settings.env))
     return client
+
+
+@lru_cache(maxsize=1)
+def _init_client() -> Any | None:
+    """Client pour le **tracing** : exige en plus ``GOR_LANGFUSE_ENABLED``."""
+    if not langfuse_enabled():
+        return None
+    return get_client()
 
 
 @lru_cache(maxsize=1)

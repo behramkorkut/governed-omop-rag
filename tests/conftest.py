@@ -37,6 +37,7 @@ def _tracing_desactive() -> Iterator[None]:
     from governed_omop_rag.observability import tracing
 
     get_settings.cache_clear()
+    tracing.get_client.cache_clear()
     tracing._init_client.cache_clear()
     tracing.get_langfuse_callback.cache_clear()
 
