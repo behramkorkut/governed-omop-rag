@@ -105,13 +105,13 @@ def test_client_indisponible_leve_une_erreur_explicite(monkeypatch: pytest.Monke
 # --------------------------------------------------------------------------- #
 
 
-def _scores(evaluations: list[Any]) -> dict[str, Any]:
-    return {e.name: e.value for e in evaluations}
+def _scores(scores: list[Any]) -> dict[str, Any]:
+    return {s.name: s.value for s in scores}
 
 
 def test_evaluateur_top1_correct() -> None:
     s = _scores(
-        datasets.evaluate_top1(
+        datasets.score_mapping(
             output={"target_concept_id": 201826, "is_mapped": True, "source": "router"},
             expected_output={"expected_concept_id": 201826},
         )
@@ -123,7 +123,7 @@ def test_evaluateur_top1_correct() -> None:
 
 def test_evaluateur_top1_incorrect() -> None:
     s = _scores(
-        datasets.evaluate_top1(
+        datasets.score_mapping(
             output={"target_concept_id": 999, "is_mapped": True, "source": "rag"},
             expected_output={"expected_concept_id": 201826},
         )
@@ -136,7 +136,7 @@ def test_evaluateur_top1_incorrect() -> None:
 def test_evaluateur_non_mappe_ne_compte_pas_comme_correct() -> None:
     """Une abstention n'est jamais un top-1, même si l'identifiant coïncide."""
     s = _scores(
-        datasets.evaluate_top1(
+        datasets.score_mapping(
             output={"target_concept_id": 201826, "is_mapped": False, "source": "unmapped"},
             expected_output={"expected_concept_id": 201826},
         )
@@ -147,7 +147,7 @@ def test_evaluateur_non_mappe_ne_compte_pas_comme_correct() -> None:
 
 def test_evaluateur_tolere_des_sorties_vides() -> None:
     """Sortie absente (tâche en erreur) : score nul, pas d'exception."""
-    s = _scores(datasets.evaluate_top1(output=None, expected_output=None))
+    s = _scores(datasets.score_mapping(output=None, expected_output=None))
     assert s["top1"] == 0.0
     assert s["mapped"] == 0.0
     assert s["source"] == "inconnu"
@@ -157,3 +157,20 @@ def test_run_sans_client_leve_une_erreur(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr("governed_omop_rag.observability.tracing.get_client", lambda: None)
     with pytest.raises(RuntimeError, match="Client Langfuse indisponible"):
         datasets.run_gold_set_experiment(dataset_name="x", route=lambda _r: None)
+
+
+def test_adaptateur_sdk_si_langfuse_installe() -> None:
+    """L'adaptateur produit de vrais objets Evaluation — ignoré si le SDK est absent.
+
+    La CI n'installe pas l'extra `observability` : ce test y est *skipped*, tandis que
+    la logique pure (`score_mapping`) reste couverte partout.
+    """
+    pytest.importorskip("langfuse", reason="extra observability non installé")
+
+    evals = datasets.evaluate_top1(
+        output={"target_concept_id": 201826, "is_mapped": True, "source": "rag"},
+        expected_output={"expected_concept_id": 201826},
+    )
+    assert [e.name for e in evals] == ["top1", "mapped", "source"]
+    assert evals[0].value == 1.0
+    assert "attendu 201826" in evals[0].comment

@@ -116,32 +116,60 @@ def push_gold_set(
 # --------------------------------------------------------------------------- #
 
 
-def evaluate_top1(
-    *, input: Any = None, output: Any = None, expected_output: Any = None, **_: Any
-) -> list[Any]:
-    """Évaluateurs par item : correction du top-1, couverture, et voie de résolution.
+@dataclass(frozen=True)
+class Score:
+    """Un score, indépendant du SDK — cœur testable sans dépendance."""
 
-    La voie (`router` déterministe vs `rag`) est enregistrée comme score catégoriel :
-    c'est elle qui montre, run après run, quelle part des cas est résolue **sans**
-    appel LLM — la borne de coût, observée plutôt qu'affirmée.
+    name: str
+    value: float | str
+    data_type: str
+    comment: str | None = None
+
+
+def score_mapping(output: Any, expected_output: Any) -> list[Score]:
+    """Calcule les scores d'un item : correction du top-1, couverture, voie de résolution.
+
+    Logique **pure** : ni réseau, ni SDK. C'est elle que couvrent les tests, et elle
+    reste exécutable dans une CI qui n'installe pas l'extra ``observability``.
+
+    La voie (`router` déterministe vs `rag`) est un score catégoriel : c'est elle qui
+    montre, run après run, quelle part des cas est résolue **sans** appel LLM — la borne
+    de coût, observée plutôt qu'affirmée.
     """
-    from langfuse import Evaluation
-
     attendu = (expected_output or {}).get("expected_concept_id")
     obtenu = (output or {}).get("target_concept_id")
     mappe = bool((output or {}).get("is_mapped"))
     source = str((output or {}).get("source") or "inconnu")
 
+    # Une abstention n'est jamais un top-1, même si l'identifiant coïncide.
     correct = 1.0 if (mappe and obtenu == attendu) else 0.0
     return [
+        Score("top1", correct, "NUMERIC", f"attendu {attendu}, obtenu {obtenu}"),
+        Score("mapped", 1.0 if mappe else 0.0, "NUMERIC"),
+        Score("source", source, "CATEGORICAL"),
+    ]
+
+
+def evaluate_top1(
+    *, input: Any = None, output: Any = None, expected_output: Any = None, **_: Any
+) -> list[Any]:
+    """Adaptateur vers le type ``Evaluation`` du SDK (consommé par ``run_experiment``).
+
+    Fine couche au-dessus de :func:`score_mapping` : le SDK lit ses évaluations par
+    accès attribut, on ne peut donc pas lui passer de simples dictionnaires. L'import
+    reste paresseux — cette fonction n'est appelée que pendant un run, qui exige de
+    toute façon le SDK et un client.
+    """
+    from langfuse import Evaluation
+
+    return [
         Evaluation(
-            name="top1",
-            value=correct,
-            data_type="NUMERIC",
-            comment=f"attendu {attendu}, obtenu {obtenu}",
-        ),
-        Evaluation(name="mapped", value=1.0 if mappe else 0.0, data_type="NUMERIC"),
-        Evaluation(name="source", value=source, data_type="CATEGORICAL"),
+            name=s.name,
+            value=s.value,
+            data_type=s.data_type,  # type: ignore[arg-type]
+            comment=s.comment,
+        )
+        for s in score_mapping(output, expected_output)
     ]
 
 
