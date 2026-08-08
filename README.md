@@ -8,7 +8,7 @@
 ![Python](https://img.shields.io/badge/python-3.11%20%C2%B7%203.12%20%C2%B7%203.13-blue)
 ![Types](https://img.shields.io/badge/mypy-strict-blue)
 ![Lint](https://img.shields.io/badge/ruff-clean-black)
-![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen)
+![Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen)
 ![Docker](https://img.shields.io/badge/docker--compose-api%20%2B%20ui%20%2B%20qdrant-2496ED)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -81,6 +81,40 @@ Le retrieval hybride place le bon concept dans le **top-5 pour 70 %** du résidu
 jugement de Claude le choisit correctement **65 %** du temps (contre 41 % sans LLM),
 pour **~0,005 $/code**. Détail complet, plancher, échecs, courbe d'abstention
 (« savoir dire je ne sais pas ») : [`docs/evaluation.md`](docs/evaluation.md).
+
+### Et les 35 % restants ? Taxonomie des échecs
+
+Un Top-1 dit *combien* de cas échouent, jamais *comment*. Or toutes les erreurs ne se
+valent pas pour un steward : proposer l'enfant direct du concept attendu n'a rien à voir
+avec proposer un concept sans rapport. Les échecs sont donc classés avec la table
+**`CONCEPT_ANCESTOR`** d'OMOP — la hiérarchie de référence du domaine, pas une heuristique
+maison (`gor eval-errors`, aucun coût LLM).
+
+Sur le run de référence (85 cas, 31 échecs) :
+
+| Catégorie d'échec | Part des échecs |
+|---|---|
+| **Sur-spécification** — enfant du concept attendu | 45,2 % |
+| **Sous-spécification** — parent du concept attendu | 19,4 % |
+| Aucun lien hiérarchique direct | 35,5 % |
+| **Total relié hiérarchiquement** (1 à 2 niveaux) | **64,5 %** |
+
+Deux tiers des échecs sont donc des **désaccords de granularité**, pas des erreurs de
+sujet : « Liquid paint causing toxic effect » proposé pour « Paint causing toxic effect »,
+ou « Malignant neoplasm of genital labia » pour « Primary malignant neoplasm of labia
+majora ». Même parmi les 35 % « sans lien direct », beaucoup restent cliniquement
+adjacents — « Fracture of first cervical vertebra » pour « Open fracture of cervical
+spine » : la vertèbre C1 *est* dans le rachis cervical, c'est la hiérarchie SNOMED qui ne
+relie pas ces deux concepts.
+
+Une seule réponse du run est franchement hors sujet. Et comme le recall@5 plafonne à 0,70,
+le bon concept est absent des candidats dans ~30 % des cas : **le Proposer ne peut pas
+choisir ce que le retrieval ne lui a pas donné**. Une partie des échecs relève donc de la
+couche retrieval, pas du jugement du LLM — distinction utile pour savoir *où* investir.
+
+> Cette taxonomie **complète** le Top-1 exact ; elle ne le remplace pas. Le chiffre à
+> retenir reste **0,650**. Annoncer un « Top-1 à un niveau près » comme métrique
+> principale reviendrait à déplacer les poteaux après le match.
 
 ### Une brique, pas une révolution
 
