@@ -540,6 +540,54 @@ def eval_map(
     _flush_traces()
 
 
+@app.command("eval-errors")
+def eval_errors(
+    scores_csv: Annotated[
+        Path, typer.Option(help="Export CSV des scores Langfuse (onglet Scores).")
+    ],
+    bronze_dir: Annotated[
+        Path | None, typer.Option(help="Répertoire OHDSI (défaut: config).")
+    ] = None,
+    ancestor_path: Annotated[
+        Path | None,
+        typer.Option(help="CONCEPT_ANCESTOR.csv (défaut: <bronze_dir>/CONCEPT_ANCESTOR.csv)."),
+    ] = None,
+    detail: Annotated[
+        bool, typer.Option("--detail", help="Liste chaque échec avec les libellés.")
+    ] = False,
+) -> None:
+    """Classe les échecs de mapping selon la hiérarchie OMOP (aucun coût LLM).
+
+    Un Top-1 dit *combien* de cas échouent, pas *comment*. Proposer l'enfant direct du
+    concept attendu n'a pas la même valeur, pour un steward, qu'un concept sans rapport.
+
+    Cette taxonomie complète le Top-1 exact ; elle ne le remplace pas.
+    """
+    from governed_omop_rag.eval.errors import classify, parse_scores_csv
+
+    settings = get_settings()
+    paires, total = parse_scores_csv(scores_csv)
+    if not paires:
+        typer.echo("Aucun échec exploitable dans cet export.")
+        return
+
+    report = classify(
+        paires,
+        bronze_dir=bronze_dir or settings.bronze_dir,
+        ancestor_path=ancestor_path,
+        total_cases=total,
+    )
+    typer.echo(report.as_table())
+
+    if detail:
+        typer.echo("\ndétail :")
+        for f in report.failures:
+            saut = f" ({f.levels} niveau(x))" if f.levels else ""
+            typer.echo(f"  [{f.category}{saut}]")
+            typer.echo(f"    attendu : {f.expected_id} {f.expected_name}")
+            typer.echo(f"    obtenu  : {f.obtained_id} {f.obtained_name}")
+
+
 @app.command("dataset-push")
 def dataset_push(
     gold_path: Annotated[Path | None, typer.Option(help="Gold set CSV (défaut: config).")] = None,
